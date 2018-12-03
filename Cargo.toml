@@ -1,0 +1,26 @@
+[package]
+name = "ocypod"
+version = "0.1.0"
+authors = ["Dave Challis <dave@suicas.net>"]
+
+[dependencies]
+actix-web = "0.7"
+actix = "0.7"
+clap = "2.32"
+env_logger = "0.5"
+chrono = { version = "0.4", features = ["serde"] }
+log = "0.4"
+redis = "0.9"
+serde = "1.0"
+serde_derive = "1.0"
+serde-humantime = "0.1"
+serde_json = "1.0"
+tokio-timer = "0.2"
+toml = "0.4"
+futures = "0.1"
+human-size = "0.4"
+humantime = "1.1"
+
+[dev-dependencies]
+net2 = "0.2"
+rand = "0.4"
