@@ -16,11 +16,9 @@ matrix:
     - rust: nightly
   fast_finish: true
 
-addons:
-  apt:
-    packages:
-      - redis-server
-
+services:
+  - redis-server
+  
 script:
   - cargo build --verbose --all
   - cargo test --verbose --all
