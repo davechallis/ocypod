@@ -3,6 +3,7 @@
 use std::path::Path;
 use std::fs;
 use std::default::Default;
+use std::str::FromStr;
 
 use toml;
 use serde::de::{Deserialize, Deserializer, Error};
@@ -17,7 +18,7 @@ use crate::models::Duration;
 // https://actix.rs/docs/server/
 
 /// Main application config, typically read from a `.toml` file.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct Config {
     /// Configuration for the application's HTTP server.
     pub server: ServerConfig,
@@ -82,6 +83,9 @@ pub struct ServerConfig {
     pub expiry_check_interval: Duration,
 
     pub next_job_delay: Option<Duration>,
+
+    #[serde(deserialize_with = "deserialize_log_level")]
+    pub log_level: log::Level,
 }
 
 fn deserialize_human_size<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<usize>, D::Error> {
@@ -98,6 +102,14 @@ fn deserialize_human_size<'de, D: Deserializer<'de>>(deserializer: D) -> Result<
     })
 }
 
+fn deserialize_log_level<'de, D: Deserializer<'de>>(deserializer: D) -> Result<log::Level, D::Error> {
+    let s: &str = Deserialize::deserialize(deserializer)?;
+    match log::Level::from_str(s) {
+        Ok(level) => Ok(level),
+        Err(_) => Err(Error::custom(format!("Invalid log level: {}", s))),
+    }
+}
+
 impl Default for ServerConfig {
     fn default() -> Self {
         ServerConfig {
@@ -109,6 +121,7 @@ impl Default for ServerConfig {
             retry_check_interval: Duration::from_secs(60),
             expiry_check_interval: Duration::from_secs(300),
             next_job_delay: None,
+            log_level: log::Level::Info,
         }
     }
 }

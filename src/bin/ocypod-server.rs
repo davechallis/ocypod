@@ -16,14 +16,17 @@ use ocypod::actors::{application::ApplicationActor, monitor::MonitorActor};
 use ocypod::handlers;
 
 fn main() {
-    // TODO: control logging from config file
-    // initialise logging, controlled by environment variable, e.g. RUST_LOG=debug
-    env_logger::init();
-
-    // TODO: look for config in default locations, e.g. /etc/ocypod.toml, ~/.ocypod.toml, ./ocypod.toml
-    // environment, etc., use config flag to specify non-default
-    // parse CLI arguments and configuration file
     let config = parse_config_from_cli_args(&parse_cli_args());
+
+    // TODO: is env_logger the best choice here, or would slog be preferable?
+    {
+        let log_settings = format!("ocypod={},ocypod-server={}", config.server.log_level, config.server.log_level);
+        env_logger::Builder::new()
+            .parse(&log_settings)
+            .default_format_module_path(false)
+            .init();
+        debug!("Log initialised using: {}", &log_settings);
+    }
 
     let http_server_addr = config.server_addr();
     let redis_url = config.redis_url();
@@ -180,7 +183,7 @@ fn parse_cli_args<'a>() -> clap::ArgMatches<'a> {
     clap::App::new("Ocypod")
         .version(handlers::info::VERSION)
         .arg(clap::Arg::with_name("config")
-            .required(true)
+            .required(false)
             .help("Path to configuration file")
             .index(1))
         .get_matches()
@@ -188,12 +191,16 @@ fn parse_cli_args<'a>() -> clap::ArgMatches<'a> {
 
 /// Parses CLI arguments, finds location of config file, and parses config file into a struct.
 fn parse_config_from_cli_args(matches: &clap::ArgMatches) -> config::Config {
-    let config_path = matches.value_of("config").unwrap();
-    match config::Config::from_file(config_path) {
-        Ok(config) => config,
-        Err(msg) => {
-            eprintln!("Failed to parse config file {}: {}", config_path, msg);
-            std::process::exit(1);
+    match matches.value_of("config") {
+        Some(config_path) => {
+            match config::Config::from_file(config_path) {
+                Ok(config) => config,
+                Err(msg) => {
+                    eprintln!("Failed to parse config file {}: {}", config_path, msg);
+                    std::process::exit(1);
+                },
+            }
         },
+        None => config::Config::default(),
     }
 }
