@@ -1,0 +1,26 @@
+sudo: false
+language: rust
+cache: cargo
+
+os:
+    - linux
+    - osx
+
+rust:
+    - stable
+    - beta
+    - nightly
+
+matrix:
+  allow_failures:
+    - rust: nightly
+  fast_finish: true
+
+addons:
+  apt:
+    packages:
+      - redis-server
+
+script:
+  - cargo build --verbose --all
+  - cargo test --verbose --all
