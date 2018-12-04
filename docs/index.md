@@ -39,7 +39,13 @@ Check built executable:
 
 ### Start Ocypod and check connectivity
 
-TODO: basic config and start server
+Make sure Redis is running locally, the start the Ocypod server using:
+
+    $ ocypod-server
+    
+This will start a new server running, listening on port 8023 and connecting
+to Redis running on `127.0.0.1:6379`. Ocypod will generally be started using a configuration file,
+using `$ ocypod-server <path-to-config>`, see TODO section for details.
 
 Check server is healthy and able to connect to its Redis backend:
 
