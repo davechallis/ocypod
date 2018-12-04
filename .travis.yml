@@ -25,4 +25,4 @@ addons:
   
 script:
   - cargo build --verbose --all
-  - cargo test --verbose --all
+  - cargo test --verbose --all -- --test-threads=1
