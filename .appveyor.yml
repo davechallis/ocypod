@@ -14,7 +14,7 @@ install:
   - rustc -vV
   - cargo -vV
   - cmd: nuget install redis-64 -excludeversion
-  - set PATH=%PATH%;%APPVEYOR_BUILD_FOLDER%\redis-64\tools\
+  - set PATH=%PATH%;C:\msys64\mingw64\bin\;%APPVEYOR_BUILD_FOLDER%\redis-64\tools\
 
 build: false
 
