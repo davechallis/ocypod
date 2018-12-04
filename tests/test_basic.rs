@@ -694,6 +694,8 @@ fn update_job_heartbeat() {
     qw.manager.update_job_heartbeat(job_id).unwrap();
     let hb1 = qw.job_meta(job_id).last_heartbeat().unwrap();
 
+    sleep(time::Duration::from_secs(1));
+
     qw.manager.update_job_heartbeat(job_id).unwrap();
     let hb2 = qw.job_meta(job_id).last_heartbeat().unwrap();
 
