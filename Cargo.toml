@@ -2,6 +2,7 @@
 name = "ocypod"
 version = "0.1.0"
 authors = ["Dave Challis <dave@suicas.net>"]
+description = "Ocypod is a Redis-backed service for orchestrating background jobs."
 repository = "https://github.com/davechallis/ocypod"
 license = "Apache-2.0"
 readme = "README.md"
