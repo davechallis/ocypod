@@ -374,7 +374,7 @@ impl<'a> RedisManager<'a> {
     }
 
     /// Check connection to Redis using ping command.
-    #[allow(clippy::unit_arg)]
+    // TODO: re-add in 1.31 #[allow(clippy::unit_arg)]
     pub fn check_ping(&self) -> OcyResult<()> {
         Ok(redis::cmd("PING").query(self.conn)?)
     }
