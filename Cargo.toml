@@ -6,6 +6,10 @@ repository = "https://github.com/davechallis/ocypod"
 license = "Apache-2.0"
 readme = "README.md"
 
+[badges]
+travis-ci = { repository = "davechallis/ocypod" }
+appveyor = { repository = "davechallis/ocypod" }
+
 [dependencies]
 actix-web = "0.7"
 actix = "0.7"
