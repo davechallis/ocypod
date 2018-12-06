@@ -5,6 +5,7 @@ use actix_web::{self, Path, State, AsyncResponder, HttpResponse};
 use crate::actors::application;
 use crate::models::{ApplicationState, OcyError};
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn tagged_jobs(
     path: Path<String>,
     state: State<ApplicationState>

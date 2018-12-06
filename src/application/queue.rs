@@ -18,7 +18,7 @@ pub struct RedisQueue<'a> {
 
 impl<'a> RedisQueue<'a> {
     /// Get a new RedisQueue struct, ensuring its name is valid.
-    pub fn new<S: Into<String>>(name: S, conn: &'a redis::Connection) -> OcyResult<Self> {
+    pub fn from_string<S: Into<String>>(name: S, conn: &'a redis::Connection) -> OcyResult<Self> {
         let name = name.into();
         if Self::is_valid_name(&name) {
             let key = Self::build_key(&name);
@@ -119,18 +119,6 @@ impl<'a> RedisQueue<'a> {
         } else {
             Ok(false)
         }
-    }
-
-    // TODO: separated endpoints for size/settings? Any other useful info here?
-    /// Get summary information about this queue. Currently includes size of queue, and its settings.
-    pub fn summary(&self) -> OcyResult<queue::Summary> {
-        let summary: queue::Summary = redis::pipe()
-            .llen(&self.jobs_key)
-            .hget(&self.key, queue::Field::Timeout)
-            .hget(&self.key, queue::Field::HeartbeatTimeout)
-            .hget(&self.key, queue::Field::ExpiresAfter)
-            .query(self.conn)?;
-        Ok(summary)
     }
 
     /// Get number of jobs currently queued.

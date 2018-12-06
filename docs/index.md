@@ -1,15 +1,21 @@
 # Ocypod
 
-Ocypod is a language-agnostic, Redis-backed job queue server with an easy to use HTTP interface. Its focus is on handling and monitoring long running jobs.
+Ocypod is a language-agnostic, Redis-backed job queue server with
+an easy to use HTTP interface. Its focus is on handling and monitoring
+long running jobs.
 
 ## Features
 
-* language agnostic - uses HTTP/JSON protocol, clients/workers can be implemented in any language
-* long running jobs - handle jobs that may be running for hours/days, detect failure early using heartbeats
+* simple setup - only requirement is Redis
+* language agnostic - uses HTTP/JSON protocol, clients/workers can be
+  implemented in any language
+* long running jobs - handle jobs that may be running for hours/days,
+  detect failure early using heartbeats
 * simple HTTP interface - no complex binary protocols or client/worker logic
-* flexible job metadata - allows for different patterns of use (e.g. progress tracking, partial results, etc.)
+* flexible job metadata - allows for different patterns of use (e.g. progress
+  tracking, partial results, etc.)
 * job inspection - check the status of any jobs submitted to the system
-* tagged jobs - custom tags allow easy grouping and searching of related jobs
+* tagging - custom tags allow easy grouping and searching of related jobs
 * automatic retries - re-queue jobs on failure or timeout
 
 ## Installation
@@ -91,7 +97,15 @@ basis).
 Next, verify that the newly created queue exists, and see its full configuration:
 
     $ curl localhost:8023/queue/example
-    {"size":0,"timeout":"10m","heartbeat_timeout":"1m","expires_after":"5m"}
+    {"timeout":"10m",
+     "heartbeat_timeout":"0s",
+     "expires_after":"5m",
+     "retries":0,
+     "retry_delays":[]}
+ 
+These can be changed at any time by re-running the queue creation command - if the
+queue already exists, its settings will be updated, and a 204 response code returned
+on success.
      
 For a full list of queue settings, see the [Queue settings](#queue-settings)
 section.

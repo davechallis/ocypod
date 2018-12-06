@@ -147,11 +147,6 @@ impl<'a> RedisManager<'a> {
         Ok(names)
     }
 
-    /// Get summary information about a single queue. This contains the queue's settings, and number of queued jobs.
-    pub fn queue_summary(&self, queue_name: &str) -> OcyResult<queue::Summary> {
-        self.queue(queue_name)?.ensure_exists()?.summary()
-    }
-
     /// Get given queue's current settings.
     pub fn queue_settings(&self, queue_name: &str) -> OcyResult<queue::Settings> {
         self.queue(queue_name)?.ensure_exists()?.settings()
@@ -379,6 +374,7 @@ impl<'a> RedisManager<'a> {
     }
 
     /// Check connection to Redis using ping command.
+    #[allow(clippy::unit_arg)]
     pub fn check_ping(&self) -> OcyResult<()> {
         Ok(redis::cmd("PING").query(self.conn)?)
     }
@@ -474,7 +470,7 @@ impl<'a> RedisManager<'a> {
 
     /// Helper function for getting a `RedisQueue` struct that uses this manager's Redis connection.
     fn queue(&self, name: &str) -> OcyResult<RedisQueue> {
-        RedisQueue::new(name, self.conn)
+        RedisQueue::from_string(name, self.conn)
     }
 
     /// Helper function for getting a `RedisJob` struct that uses this manager's Redis connection.
@@ -484,7 +480,7 @@ impl<'a> RedisManager<'a> {
 
     /// Helper function for getting a `RedisTag` struct that uses this manager's Redis connection.
     fn tag(&self, name: &str) -> OcyResult<RedisTag> {
-        RedisTag::new(name, self.conn)
+        RedisTag::from_str(name, self.conn)
     }
 }
 

@@ -28,9 +28,9 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             timeout: Duration::from_secs(300),
-            heartbeat_timeout: Duration::from_secs(60),
+            heartbeat_timeout: Duration::from_secs(0),
             expires_after: Duration::from_secs(300),
-            retries: 3,
+            retries: 0,
             retry_delays: Vec::new(),
         }
     }

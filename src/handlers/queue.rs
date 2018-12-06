@@ -15,6 +15,7 @@ use crate::models::{ApplicationState, job, queue, OcyError};
 /// # Returns
 ///
 /// * 200 - JSON response containing list of queue names.
+#[allow(clippy::needless_pass_by_value)]
 pub fn index(req: &HttpRequest<ApplicationState>) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
     req.state().redis_addr.send(application::GetQueueNames)
         .from_err()
@@ -35,6 +36,7 @@ pub fn index(req: &HttpRequest<ApplicationState>) -> Box<Future<Item=HttpRespons
 }
 
 /// Handles `PUT /queue/{queue_name}` requests.
+#[allow(clippy::needless_pass_by_value)]
 pub fn create_or_update_queue(
     (path, json): (Path<String>, Json<queue::Settings>),
     state: State<ApplicationState>
@@ -66,6 +68,7 @@ pub fn create_or_update_queue(
         .responder()
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn delete_queue(
     path: Path<String>,
     state: State<ApplicationState>
@@ -91,12 +94,13 @@ pub fn delete_queue(
         .responder()
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn queue_summary(
     path: Path<String>,
     state: State<ApplicationState>
 ) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
     let queue_name = path.into_inner();
-    state.redis_addr.send(application::GetQueueSummary(queue_name.clone()))
+    state.redis_addr.send(application::GetQueueSettings(queue_name.clone()))
         .from_err()
         .and_then(move |res| { // merge async work with sync
             match res {
@@ -115,6 +119,7 @@ pub fn queue_summary(
         .responder()
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn create_job(
     (path, json): (Path<String>, Json<job::CreateRequest>),
     state: State<ApplicationState>
@@ -143,6 +148,7 @@ pub fn create_job(
         .responder()
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn next_job(
     path: Path<String>,
     state: State<ApplicationState>

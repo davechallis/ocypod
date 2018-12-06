@@ -23,6 +23,7 @@ pub struct JobFields {
 /// * 200 - JSON response containing all data about a job
 /// * 400 - bad request error if any requested fields were not recognised
 /// * 404 - not found error if no job with given `job_id` is found
+#[allow(clippy::needless_pass_by_value)]
 pub fn index(
     (path, query): (Path<u64>, Query<JobFields>),
     state: State<ApplicationState>
@@ -67,6 +68,7 @@ pub fn index(
 ///
 /// * 200 - JSON response containing status string
 /// * 404 - not found error if no job with given `job_id` is found
+#[allow(clippy::needless_pass_by_value)]
 pub fn status(
     path: Path<u64>,
     state: State<ApplicationState>
@@ -99,6 +101,7 @@ pub fn status(
 /// * 204 - update successfully performed
 /// * 400 - bad request, could not perform update with given JSON request
 /// * 404 - not found error if no job with given `job_id` is found
+#[allow(clippy::needless_pass_by_value)]
 pub fn update(
     (path, json): (Path<u64>, Json<job::UpdateRequest>),
     state: State<ApplicationState>
@@ -133,6 +136,7 @@ pub fn update(
 /// * 204 - update successfully performed
 /// * 404 - not found error if no job with given `job_id` is found
 /// * 409 - unable to update heartbeat, job not in `running` state
+#[allow(clippy::needless_pass_by_value)]
 pub fn heartbeat(
     path: Path<u64>,
     state: State<ApplicationState>
@@ -171,6 +175,7 @@ pub fn heartbeat(
 /// * 204 - update successfully performed
 /// * 400 - bad request, could not perform update with given JSON request
 /// * 404 - not found error if no job with given `job_id` is found
+#[allow(clippy::needless_pass_by_value)]
 pub fn delete(
     path: Path<u64>,
     state: State<ApplicationState>
@@ -201,6 +206,7 @@ pub fn delete(
 ///
 /// * 200 - JSON response containing job output, if any
 /// * 404 - not found error if no job with given `job_id` is found
+#[allow(clippy::needless_pass_by_value)]
 pub fn output(
     path: Path<u64>,
     state: State<ApplicationState>
@@ -231,6 +237,7 @@ pub fn output(
 ///
 /// * 204 - if output was successfully updated
 /// * 404 - not found error if no job with given `job_id` is found
+#[allow(clippy::needless_pass_by_value)]
 pub fn set_output(
     (path, json): (Path<u64>, Json<serde_json::Value>),
     state: State<ApplicationState>

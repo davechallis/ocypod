@@ -201,7 +201,7 @@ impl<'a> RedisJob<'a> {
     /// Get queue this job was created in. This queue may or may not exist.
     pub fn queue(&self) -> OcyResult<RedisQueue> {
         match self.conn.hget::<_, _, Option<String>>(&self.key, job::Field::Queue)? {
-            Some(queue) => Ok(RedisQueue::new(queue, self.conn)?),
+            Some(queue) => Ok(RedisQueue::from_string(queue, self.conn)?),
             None        => Err(OcyError::NoSuchJob(self.id)),
         }
     }

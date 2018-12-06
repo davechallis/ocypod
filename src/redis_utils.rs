@@ -42,11 +42,11 @@ pub fn transaction<
 ) -> OcyResult<T> {
     let mut func = func;
     loop {
-        let _: () = cmd("WATCH").arg(keys).query(conn)?;
+        cmd("WATCH").arg(keys).query(conn)?;
         let mut p = redis::pipe();
         if let Some(result) = func(p.atomic())? {
             // ensure no watch is left in connection, regardless of whether pipeline was used
-            let _: () = cmd("UNWATCH").query(conn)?;
+            cmd("UNWATCH").query(conn)?;
             return Ok(result);
         }
     }

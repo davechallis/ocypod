@@ -138,17 +138,17 @@ impl Handler<DeleteQueue> for ApplicationActor {
 
 
 /// Messaged used to get summary information about a queue with given name.
-pub struct GetQueueSummary(pub String);
+pub struct GetQueueSettings(pub String);
 
-impl Message for GetQueueSummary {
-    type Result = OcyResult<queue::Summary>;
+impl Message for GetQueueSettings {
+    type Result = OcyResult<queue::Settings>;
 }
 
-impl Handler<GetQueueSummary> for ApplicationActor {
-    type Result = OcyResult<queue::Summary>;
+impl Handler<GetQueueSettings> for ApplicationActor {
+    type Result = OcyResult<queue::Settings>;
 
-    fn handle(&mut self, msg: GetQueueSummary, _ctx: &mut Self::Context) -> Self::Result {
-        RedisManager::new(self.get_connection()?).queue_summary(&msg.0)
+    fn handle(&mut self, msg: GetQueueSettings, _ctx: &mut Self::Context) -> Self::Result {
+        RedisManager::new(self.get_connection()?).queue_settings(&msg.0)
     }
 }
 

@@ -248,49 +248,6 @@ fn queue_size() {
 }
 
 #[test]
-fn queue_summary_sizes() {
-    let (_ctx, conn) = init();
-    let queue_name = "a";
-    let qw = QueueWrapper::new(&conn, queue_name);
-
-    let queue_settings = queue::Settings {
-        timeout: Duration::from_secs(600),
-        heartbeat_timeout: Duration::from_secs(30),
-        expires_after: Duration::from_secs(86400),
-        retries: 0,
-        retry_delays: Vec::new(),
-    };
-    let mut expected_summary = queue::Summary {
-        size: 0,
-        timeout: Duration::from_secs(600),
-        heartbeat_timeout: Duration::from_secs(30),
-        expires_after: Duration::from_secs(86400),
-    };
-    assert_eq!(qw.manager.queue_summary(queue_name), Err(OcyError::NoSuchQueue(queue_name.to_owned())));
-    qw.manager.create_or_update_queue(queue_name, &queue_settings).unwrap();
-    assert_eq!(&qw.manager.queue_summary(queue_name).unwrap(), &expected_summary);
-
-    qw.new_default_job();
-    qw.new_default_job();
-    qw.new_default_job();
-    qw.new_default_job();
-    expected_summary.size = 4;
-    assert_eq!(&qw.manager.queue_summary(queue_name).unwrap(), &expected_summary);
-
-    qw.next_job();
-    qw.next_job();
-    expected_summary.size = 2;
-    assert_eq!(&qw.manager.queue_summary(queue_name).unwrap(), &expected_summary);
-
-    qw.next_job();
-    qw.next_job();
-    qw.next_empty_job();
-    qw.next_empty_job();
-    expected_summary.size = 0;
-    assert_eq!(&qw.manager.queue_summary(queue_name).unwrap(), &expected_summary);
-}
-
-#[test]
 fn basic_summary() {
     let (_ctx, conn) = init();
     let qw = QueueWrapper::new(&conn, "none");

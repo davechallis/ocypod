@@ -14,7 +14,7 @@ pub struct RedisTag<'a> {
 
 impl<'a> RedisTag<'a> {
     /// Create new RedisTag struct with given name. Will return error unless name is valid.
-    pub fn new(tag: &str, conn: &'a Connection) -> OcyResult<Self> {
+    pub fn from_str(tag: &str, conn: &'a Connection) -> OcyResult<Self> {
         if Self::is_valid_tag(tag) {
             Ok(Self { key: Self::build_key(tag), conn })
         } else {

@@ -67,8 +67,6 @@ fn main() {
     // messages to the RedisActor (which performs task queue operations).
     let config_copy = config.clone();
     let mut http_server = server::new(move || {
-        let max_body_size = max_body_size.clone();
-
         App::with_state(ApplicationState::new(redis_addr.clone(), config_copy.clone()))
             // TODO: better endpoint name? Info? System? Status?
             // get a summary of the Ocypod system as a whole, e.g. number of jobs in queues, job states, etc.
@@ -129,8 +127,6 @@ fn main() {
             .scope("/queue", |queue_scope| {
                 queue_scope
                     .resource("/{name}/job", move |r| {
-                        let max_body_size = max_body_size.clone();
-
                         // get the next job to work on from given queue
                         r.method(http::Method::GET).with(handlers::queue::next_job);
 
