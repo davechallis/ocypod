@@ -1,11 +1,12 @@
 use futures::Future;
+use log::error;
 
 use actix_web::{self, Path, State, AsyncResponder, HttpResponse};
 
 use crate::actors::application;
 use crate::models::{ApplicationState, OcyError};
 
-// TODO: re-add in 1.31 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn tagged_jobs(
     path: Path<String>,
     state: State<ApplicationState>

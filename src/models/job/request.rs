@@ -1,4 +1,5 @@
 use serde_json;
+use serde_derive::*;
 
 use crate::models::{Duration, job::Status};
 

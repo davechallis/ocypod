@@ -1,6 +1,7 @@
 //! Defines convenience interface to queue in Redis.
 
 use redis::{Commands, PipelineCommands, RedisResult};
+use log::{debug, info};
 
 use crate::models::{OcyError, OcyResult, queue, job};
 use crate::redis_utils::{transaction, vec_from_redis_pipe};

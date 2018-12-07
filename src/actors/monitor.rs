@@ -1,10 +1,12 @@
 //! Defines actor for running periodic Redis tasks.
-
-use actix::prelude::*;
 use std::time::Duration;
-use super::application::{ApplicationActor, CheckJobTimeouts, CheckJobExpiry, CheckJobRetries};
-use crate::config::ServerConfig;
+
+use log::{info, error};
+use actix::prelude::{Actor, Addr, Arbiter, AsyncContext, Context};
 use futures::Future;
+
+use crate::config::ServerConfig;
+use super::application::{ApplicationActor, CheckJobTimeouts, CheckJobExpiry, CheckJobRetries};
 
 /// Actor that performs periodic operations in Redis.
 ///

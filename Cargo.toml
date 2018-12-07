@@ -6,6 +6,7 @@ description = "Ocypod is a Redis-backed service for orchestrating background job
 repository = "https://github.com/davechallis/ocypod"
 license = "Apache-2.0"
 readme = "README.md"
+edition = "2018"
 
 [badges]
 travis-ci = { repository = "davechallis/ocypod" }

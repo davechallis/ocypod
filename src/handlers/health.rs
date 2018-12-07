@@ -2,6 +2,8 @@
 
 use futures::Future;
 use actix_web::{self, AsyncResponder, HttpRequest, HttpResponse};
+use serde_derive::*;
+use log::error;
 
 use crate::actors::application;
 use crate::models::ApplicationState;

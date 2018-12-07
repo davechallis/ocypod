@@ -1,16 +1,9 @@
 //! Main executable that runs the HTTP server for the queue application.
 
-extern crate ocypod;
-extern crate clap;
-extern crate actix;
-extern crate actix_web;
-extern crate env_logger;
-extern crate redis;
-#[macro_use]
-extern crate log;
-
 use actix_web::{server, App, http, middleware::Logger};
-use actix::prelude::*;
+use actix::prelude::{Actor, SyncArbiter};
+use log::{debug, info};
+
 use ocypod::{config, models::ApplicationState};
 use ocypod::actors::{application::ApplicationActor, monitor::MonitorActor};
 use ocypod::handlers;
