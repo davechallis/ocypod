@@ -4,6 +4,7 @@
 
 use std::time::Instant;
 
+use log::error;
 use futures::{future, Future};
 use actix_web::{self, Path, State, AsyncResponder, HttpRequest, HttpResponse, Json};
 

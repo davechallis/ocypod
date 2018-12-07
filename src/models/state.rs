@@ -1,6 +1,6 @@
 //! Defines shared application state available to each HTTP worker thread.
 
-use actix::prelude::*;
+use actix::prelude::Addr;
 use crate::actors::application::ApplicationActor;
 use crate::config::Config;
 

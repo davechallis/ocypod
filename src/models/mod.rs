@@ -15,6 +15,7 @@ pub use self::error::{OcyError, OcyResult};
 use std::collections::HashMap;
 
 use redis::{self, RedisResult, FromRedisValue};
+use serde_derive::*;
 
 // TODO: add redis stats, e.g. memory used etc.
 #[derive(Debug, Eq, PartialEq, Serialize)]

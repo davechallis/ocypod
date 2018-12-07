@@ -1,8 +1,10 @@
 //! Defines custom `DateTime` type.
 
 use std::fmt;
+
 use chrono;
 use redis::{self, FromRedisValue, ToRedisArgs, RedisResult};
+use serde_derive::*;
 
 /// Thin wrapper around a `chrono::DateTime<Utc>` with functions for custom (de)serialisation.
 #[derive(Clone, Debug, PartialEq, PartialOrd, Serialize)]

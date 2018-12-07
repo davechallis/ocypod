@@ -2,6 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use redis::{self, FromRedisValue, ToRedisArgs};
+use serde_derive::*;
 
 const ID_FIELD: &str = "id";
 const QUEUE_FIELD: &str = "queue";

@@ -2,9 +2,10 @@
 use std::thread;
 use std::time::Duration;
 
-use actix::prelude::*;
+use actix::prelude::{Actor, SyncContext, Message, Handler};
 use serde_json;
 use redis;
+use log::{debug, warn};
 
 use crate::application::RedisManager;
 use crate::models::{job, queue, OcyResult, ServerInfo};

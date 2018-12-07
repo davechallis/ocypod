@@ -2,13 +2,15 @@
 //!
 //! Main struct provided is `RedisManager`, through which all job queue operations are exposed.
 //! These will typically have HTTP handlers mapped to them.
-
-use redis::{self, Connection, Commands, PipelineCommands};
-use crate::models::{job, queue, JobStats, ServerInfo, DateTime, QueueInfo, OcyResult, OcyError};
-use crate::redis_utils::{vec_from_redis_pipe, transaction};
 use std::collections::HashMap;
 use std::default::Default;
+
+use log::{debug, info, warn};
+use redis::{self, Connection, Commands, PipelineCommands};
 use serde_json;
+
+use crate::models::{job, queue, JobStats, ServerInfo, DateTime, QueueInfo, OcyResult, OcyError};
+use crate::redis_utils::{vec_from_redis_pipe, transaction};
 use super::{queue::RedisQueue, job::RedisJob, tag::RedisTag, keys};
 
 /// Manages queues and jobs within Redis. Contains main public functions that are called by HTTP services.
@@ -80,7 +82,7 @@ impl<'a> RedisManager<'a> {
                 Some(status) => status,
                 None         => continue,
             };
-            let mut queue_info = queues_info.entry(queue_name).or_insert_with(QueueInfo::default);
+            let queue_info = queues_info.entry(queue_name).or_insert_with(QueueInfo::default);
             queue_info.incr_status_count(&status);
         }
 

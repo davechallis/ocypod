@@ -1,4 +1,5 @@
 use redis::{self, FromRedisValue, RedisResult, from_redis_value};
+use serde_derive::*;
 
 use crate::models::Duration;
 

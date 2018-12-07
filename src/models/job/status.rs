@@ -2,7 +2,9 @@
 
 use std::fmt;
 use std::str::FromStr;
+
 use redis::{self, FromRedisValue, ToRedisArgs};
+use serde_derive::*;
 
 const QUEUED_STATUS: &str = "queued";
 const RUNNING_STATUS: &str = "running";

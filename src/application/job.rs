@@ -1,5 +1,6 @@
 //! Defines most application logic that's based around jobs.
 
+use log::{debug, info};
 use redis::{Commands, Pipeline, ToRedisArgs, PipelineCommands};
 
 use crate::models::{DateTime, OcyError, OcyResult, job};

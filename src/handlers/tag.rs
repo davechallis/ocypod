@@ -1,4 +1,5 @@
 use futures::Future;
+use log::error;
 
 use actix_web::{self, Path, State, AsyncResponder, HttpResponse};
 
