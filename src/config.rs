@@ -14,8 +14,6 @@ use log::debug;
 use crate::models::Duration;
 
 // TODO: additional config
-// * next job delay
-// * shutdown_timeout
 // * keepalive
 // https://actix.rs/docs/server/
 
@@ -84,6 +82,9 @@ pub struct ServerConfig {
     /// Determines how often ended tasks are checked for expiry. Defaults to "5m" if not specified.
     pub expiry_check_interval: Duration,
 
+    /// Amount of time workers have to finish requests after server receives SIGTERM.
+    pub shutdown_timeout: Option<Duration>,
+
     pub next_job_delay: Option<Duration>,
 
     #[serde(deserialize_with = "deserialize_log_level")]
@@ -122,6 +123,7 @@ impl Default for ServerConfig {
             timeout_check_interval: Duration::from_secs(30),
             retry_check_interval: Duration::from_secs(60),
             expiry_check_interval: Duration::from_secs(300),
+            shutdown_timeout: None,
             next_job_delay: None,
             log_level: log::Level::Info,
         }

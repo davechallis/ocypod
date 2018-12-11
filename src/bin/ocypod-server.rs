@@ -158,6 +158,11 @@ fn main() {
         http_server = http_server.workers(num_workers);
     }
 
+    if let Some(dur) = config.server.shutdown_timeout {
+        debug!("Setting shutdown timeout to {}", dur);
+        http_server = http_server.shutdown_timeout(dur.as_secs() as u16);
+    }
+
     http_server.bind(&http_server_addr)
         .expect("Failed to start HTTP server")
         .start();
@@ -180,7 +185,7 @@ fn parse_cli_args<'a>() -> clap::ArgMatches<'a> {
 
 /// Parses CLI arguments, finds location of config file, and parses config file into a struct.
 fn parse_config_from_cli_args(matches: &clap::ArgMatches) -> config::Config {
-    match matches.value_of("config") {
+    let conf = match matches.value_of("config") {
         Some(config_path) => {
             match config::Config::from_file(config_path) {
                 Ok(config) => config,
@@ -191,5 +196,15 @@ fn parse_config_from_cli_args(matches: &clap::ArgMatches) -> config::Config {
             }
         },
         None => config::Config::default(),
+    };
+
+    // validate config settings
+    if let Some(dur) = &conf.server.shutdown_timeout {
+        if dur.as_secs() > std::u16::MAX.into() {
+            eprintln!("Maximum shutdown_timeout is {} seconds", std::u16::MAX);
+            std::process::exit(1);
+        }
     }
+
+    conf
 }

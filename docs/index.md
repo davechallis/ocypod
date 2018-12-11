@@ -210,6 +210,7 @@ Fields:
 * `port` (int) - port to listen on (default: 8023)
 * `threads` (int) - number of HTTP worker threads (default: <number of CPUs>)
 * `max_body_size` (string) - maximum body size for client POST/PUT requests as a human readable size (default: "256kB")
+* `shutdown_timeout` (string) - graceful shutdown time for workers, triggered by SIGTERM signal (default: "30s")
 * `timeout_check_interval` (string) - frequency of checks for jobs to time out, as a human readable duration (default: "30s")
 * `retry_check_interval` (string) - frequency of checks for jobs to retry, as a human readable duration (default: "1m")
 * `expiry_check_interval` (string) - frequency of checks for jobs to expire (i.e. remove from the queue system), as a human readable duration (default: "5m")
