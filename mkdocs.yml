@@ -1,2 +1,10 @@
 site_name: Ocypod
 theme: flatly
+nav:
+  - 'Installation': 'installation.md'
+  - 'Quickstart': 'quickstart.md'
+  - 'Configuration': 'configuration.md'
+  - 'Core concepts': 'core_concepts.md'
+  - 'Writing workers': 'workers.md'
+  - 'API': 'api.md'
+  - 'Internals': 'internals.md'
