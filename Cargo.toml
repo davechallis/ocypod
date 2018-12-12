@@ -16,7 +16,7 @@ appveyor = { repository = "davechallis/ocypod" }
 actix-web = "0.7"
 actix = "0.7"
 clap = "2.32"
-env_logger = "0.5"
+env_logger = "0.6"
 chrono = { version = "0.4", features = ["serde"] }
 log = "0.4"
 redis = "0.9"
@@ -28,7 +28,7 @@ tokio-timer = "0.2"
 toml = "0.4"
 futures = "0.1"
 human-size = "0.4"
-humantime = "1.1"
+humantime = "1.2"
 
 [dev-dependencies]
 net2 = "0.2"
