@@ -3,6 +3,7 @@
 use actix_web::{server, App, http, middleware::Logger};
 use actix::prelude::{Actor, SyncArbiter};
 use log::{debug, info};
+use num_cpus;
 
 use ocypod::{config, models::ApplicationState};
 use ocypod::actors::{application::ApplicationActor, monitor::MonitorActor};
@@ -34,15 +35,14 @@ fn main() {
     // initialise Actix actor system
     let sys = actix::System::new("ocypod");
 
-    // TODO: don't hardcode to 4, pick some other sensible value
-    let num_workers = config.redis.threads.unwrap_or(4);
+    let num_workers = config.redis.threads.unwrap_or(num_cpus::get());
 
     // start N sync workers
-    debug!("Starting {} Redis workers", num_workers);
+    debug!("Starting {} Redis worker(s)", num_workers);
     let redis_addr = SyncArbiter::start(num_workers, move || {
         ApplicationActor::new(redis_client.clone())
     });
-    info!("{} Redis workers started", num_workers);
+    info!("{} Redis worker(s) started", num_workers);
 
     // start actor that executes periodic tasks
     let _monitor_addr = MonitorActor::new(redis_addr.clone(), &config.server).start();

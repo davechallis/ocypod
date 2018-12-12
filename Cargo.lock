@@ -833,6 +833,7 @@ dependencies = [
  "humantime 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "net2 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num_cpus 1.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "redis 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",

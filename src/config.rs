@@ -137,8 +137,7 @@ pub struct RedisConfig {
     /// Redis URL to connect to. Defaults to "redis://127.0.0.1".
     pub url: String,
 
-    // TODO: determine sensible default
-    /// Number of connections to Redis that will be spawned.
+    /// Number of connections to Redis that will be spawned. Defaults to number of CPUs if not specified.
     pub threads: Option<usize>,
 }
 
