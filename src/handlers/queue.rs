@@ -38,7 +38,7 @@ pub fn index(req: &HttpRequest<ApplicationState>) -> Box<Future<Item=HttpRespons
 
 /// Handles `PUT /queue/{queue_name}` requests.
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
-pub fn create_or_update_queue(
+pub fn create_or_update(
     (path, json): (Path<String>, Json<queue::Settings>),
     state: State<ApplicationState>
 ) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
@@ -46,7 +46,7 @@ pub fn create_or_update_queue(
     let queue_settings = json.into_inner();
     state.redis_addr.send(application::CreateOrUpdateQueue(queue_name.to_owned(), queue_settings))
         .from_err()
-        .and_then(move |res| { // merge async work with sync
+        .and_then(move |res| {
             match res {
                 Ok(true)  => Ok(HttpResponse::Created()
                     .header("Location", format!("/queue/{}", queue_name))
@@ -70,14 +70,14 @@ pub fn create_or_update_queue(
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
-pub fn delete_queue(
+pub fn delete(
     path: Path<String>,
     state: State<ApplicationState>
 ) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
     let queue_name = path.into_inner();
     state.redis_addr.send(application::DeleteQueue(queue_name.clone()))
         .from_err()
-        .and_then(move |res| { // merge async work with sync
+        .and_then(move |res| {
             match res {
                 Ok(true)  => Ok(HttpResponse::NoContent().reason("Queue deleted").finish()),
                 Ok(false) => Ok(HttpResponse::NotFound().reason("Queue not found").finish()),
@@ -96,14 +96,14 @@ pub fn delete_queue(
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
-pub fn queue_summary(
+pub fn settings(
     path: Path<String>,
     state: State<ApplicationState>
 ) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
     let queue_name = path.into_inner();
     state.redis_addr.send(application::GetQueueSettings(queue_name.clone()))
         .from_err()
-        .and_then(move |res| { // merge async work with sync
+        .and_then(move |res| {
             match res {
                 Ok(summary) => Ok(HttpResponse::Ok().json(summary)),
                 Err(OcyError::NoSuchQueue(_)) => Ok(HttpResponse::NotFound().into()),
@@ -121,6 +121,31 @@ pub fn queue_summary(
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
+pub fn size(
+    path: Path<String>,
+    state: State<ApplicationState>
+) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
+    let queue_name = path.into_inner();
+    state.redis_addr.send(application::GetQueueSize(queue_name.clone()))
+        .from_err()
+        .and_then(move |res| {
+            match res {
+                Ok(size) => Ok(HttpResponse::Ok().json(size)),
+                Err(OcyError::NoSuchQueue(_)) => Ok(HttpResponse::NotFound().into()),
+                Err(OcyError::RedisConnection(err)) => {
+                    error!("[queue:{}] failed to fetch queue size: {}", &queue_name, err);
+                    Ok(HttpResponse::ServiceUnavailable().body(err.to_string()))
+                },
+                Err(err)    => {
+                    error!("[queue:{}] failed to fetch queue size: {}", &queue_name, err);
+                    Ok(HttpResponse::InternalServerError().body(err.to_string()))
+                },
+            }
+        })
+        .responder()
+}
+
+#[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn create_job(
     (path, json): (Path<String>, Json<job::CreateRequest>),
     state: State<ApplicationState>
@@ -129,7 +154,7 @@ pub fn create_job(
     let job_req = json.into_inner();
     state.redis_addr.send(application::CreateJob(queue_name.clone(), job_req))
         .from_err()
-        .and_then(move |res| { // merge async work with sync
+        .and_then(move |res| {
             match res {
                 Ok(job_id) => Ok(HttpResponse::Created()
                     .header("Location", format!("/job/{}", job_id))

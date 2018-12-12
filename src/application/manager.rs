@@ -47,7 +47,6 @@ impl<'a> RedisManager<'a> {
         self.job(job_id).delete()
     }
 
-    // TODO: rename/split?
     /// Get summary of server and queue data. Currently contains:
     /// * count of each job's status by queue
     /// * total number of jobs processed and their final status

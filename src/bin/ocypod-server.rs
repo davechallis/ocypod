@@ -61,7 +61,6 @@ fn main() {
     let config_copy = config.clone();
     let mut http_server = server::new(move || {
         App::with_state(ApplicationState::new(redis_addr.clone(), config_copy.clone()))
-            // TODO: better endpoint name? Info? System? Status?
             // get a summary of the Ocypod system as a whole, e.g. number of jobs in queues, job states, etc.
             .scope("/info", |info_scope| {
                 info_scope
@@ -100,7 +99,6 @@ fn main() {
                     .resource("/{id}/heartbeat", |r| r.method(http::Method::PUT).with(handlers::job::heartbeat))
 
                     .resource("/{id}", move |r| {
-                        // TODO: add endpoint to get multiple fields
                         // get all metadata about a single job with given ID
                         r.method(http::Method::GET).with(handlers::job::index);
 
@@ -132,16 +130,18 @@ fn main() {
                         }
                     })
 
+                    // get queue size
+                    .resource("/{name}/size", |r| r.method(http::Method::GET).with(handlers::queue::size))
+
                     .resource("/{name}", |r| {
-                        // TODO: split into separate endpoints?
-                        // get summary information about a given queue, size, settings, etc.
-                        r.method(http::Method::GET).with(handlers::queue::queue_summary);
+                        // get current queue settings settings, etc.
+                        r.method(http::Method::GET).with(handlers::queue::settings);
 
                         // create a new queue, or update an existing one with given settings
-                        r.method(http::Method::PUT).with(handlers::queue::create_or_update_queue);
+                        r.method(http::Method::PUT).with(handlers::queue::create_or_update);
 
                         // delete a queue and all currently queued jobs on it
-                        r.method(http::Method::DELETE).with(handlers::queue::delete_queue)
+                        r.method(http::Method::DELETE).with(handlers::queue::delete)
                     })
 
                     // get a list of all queue names

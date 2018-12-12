@@ -65,7 +65,7 @@ impl ApplicationActor {
                     return Ok(self.conn.as_ref().unwrap());
                 },
                 Err(err) => {
-                    warn!("Redis connection failed, retrying in 1s: {}", err);
+                    warn!("Redis connection failed, retrying in 5s: {}", err);
                     thread::sleep(Duration::from_secs(5));
                 }
             }
@@ -122,7 +122,7 @@ impl Handler<CreateOrUpdateQueue> for ApplicationActor {
 }
 
 
-/// Messaged used to delete a queue with given name.
+/// Message used to delete a queue with given name.
 pub struct DeleteQueue(pub String);
 
 impl Message for DeleteQueue {
@@ -138,7 +138,7 @@ impl Handler<DeleteQueue> for ApplicationActor {
 }
 
 
-/// Messaged used to get summary information about a queue with given name.
+/// Message used to get summary information about a queue with given name.
 pub struct GetQueueSettings(pub String);
 
 impl Message for GetQueueSettings {
@@ -150,6 +150,22 @@ impl Handler<GetQueueSettings> for ApplicationActor {
 
     fn handle(&mut self, msg: GetQueueSettings, _ctx: &mut Self::Context) -> Self::Result {
         RedisManager::new(self.get_connection()?).queue_settings(&msg.0)
+    }
+}
+
+
+/// Message used to get current size of a queue.
+pub struct GetQueueSize(pub String);
+
+impl Message for GetQueueSize {
+    type Result = OcyResult<u64>;
+}
+
+impl Handler<GetQueueSize> for ApplicationActor {
+    type Result = OcyResult<u64>;
+
+    fn handle(&mut self, msg: GetQueueSize, _ctx: &mut Self::Context) -> Self::Result {
+        RedisManager::new(self.get_connection()?).queue_size(&msg.0)
     }
 }
 
