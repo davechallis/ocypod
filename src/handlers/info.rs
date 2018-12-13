@@ -33,8 +33,7 @@ pub fn index(req: &HttpRequest<ApplicationState>) -> Box<Future<Item=HttpRespons
         .responder()
 }
 
-// TODO: should this return JSON instead of text/plain?
 /// Handles `GET /info/version` requests.
-pub fn version(_: &HttpRequest<ApplicationState>) -> &'static str {
-    VERSION
+pub fn version(_: &HttpRequest<ApplicationState>) -> HttpResponse {
+    HttpResponse::Ok().json(VERSION)
 }
