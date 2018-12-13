@@ -33,7 +33,6 @@ pub struct CreateRequest {
     /// Set to 0 for no expiry.
     pub expires_after: Option<Duration>,
 
-    // TODO: should -1 be used for unlimited retries?
     /// Number of times this job can be attempted to run. If not specified, then the queue's max tries setting
     /// will be used.
     ///

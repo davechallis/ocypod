@@ -2,7 +2,6 @@ use std::fmt;
 use std::str::FromStr;
 use redis::{self, FromRedisValue, ToRedisArgs};
 
-// TODO: currently identical to those defined in job/field.rs, if this remains the case, share
 const TIMEOUT_FIELD: &str = "timeout";
 const HEARTBEAT_TIMEOUT_FIELD: &str = "heartbeat_timeout";
 const EXPIRES_AFTER_FIELD: &str = "expires_after";

@@ -1,7 +1,5 @@
 //! HTTP handlers for the `/queue` endpoints.
 
-// TODO: examples of responses
-
 use std::time::Instant;
 
 use log::error;
