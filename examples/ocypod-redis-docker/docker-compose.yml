@@ -1,0 +1,20 @@
+version: '3'
+
+services:
+  ocypod:
+    image: davechallis/ocypod:latest
+    volumes:
+      - ./ocypod.toml:/etc/ocypod.toml:ro
+    command: /etc/ocypod.toml
+    ports:
+      - 8023:8023
+  ocypod-redis:
+    image: redis:5
+    ports:
+      - 6379:6379
+    volumes:
+      - ocypod-redis-data:/data
+
+volumes:
+  ocypod-redis-data:
+    driver: local
