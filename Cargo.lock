@@ -821,7 +821,7 @@ dependencies = [
 
 [[package]]
 name = "ocypod"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "actix 0.7.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-web 0.7.16 (registry+https://github.com/rust-lang/crates.io-index)",
