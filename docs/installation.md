@@ -11,7 +11,16 @@ avoid any clashes with other key spaces.
 The latest [stable release](https://redis.io/download) (5.0) is recommended,
 though there are no known issues using 4.0 or 3.2.
 
-For development purposes, you can use `docker-compose up` in order to run a local redis instance.
+
+## Running from Docker
+
+The simplest way of running Ocypod is using Docker. Images can be found at:
+
+* [https://hub.docker.com/r/davechallis/ocypod](https://hub.docker.com/r/davechallis/ocypod)
+
+The [examples](https://github.com/davechallis/ocypod/tree/master/examples/ocypod-redis-docker)
+directory contains a sample [docker-compose.yml](https://github.com/davechallis/ocypod/blob/master/examples/ocypod-redis-docker/docker-compose.yml) file that can be used to get Ocypod and
+Redis up and running quickly.
 
 ## Building from source
 
