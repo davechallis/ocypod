@@ -674,7 +674,7 @@ fn update_job_output() {
 
     // can only update output for running jobs
     match qw.manager.set_job_output(job_id, &"foo".into()) {
-        Err(OcyError::BadRequest(_)) => (),
+        Err(OcyError::Conflict(_)) => (),
         x                              => assert!(false, "Unexpected result: {:?}", x),
     }
 
@@ -710,7 +710,7 @@ fn queued_status_transitions() {
                         job::Status::TimedOut];
     for new_status in not_allowed {
         match qw.manager.set_job_status(job_id, new_status) {
-            Err(OcyError::BadRequest(_)) => (),
+            Err(OcyError::Conflict(_)) => (),
             x => assert!(false, "Unexpected result when changing status Queued -> {}: {:?}", new_status, x),
         }
     }
@@ -734,7 +734,7 @@ fn running_status_transitions() {
     let job_id = qw.new_running_default_job().id();
     for new_status in not_allowed {
         match qw.manager.set_job_status(job_id, new_status) {
-            Err(OcyError::BadRequest(_)) => (),
+            Err(OcyError::Conflict(_)) => (),
             x => assert!(false, "Unexpected result when changing status Running -> {}: {:?}", new_status, x),
         }
     }
@@ -772,7 +772,7 @@ fn completed_status_transitions() {
     ];
     for new_status in not_allowed {
         match qw.manager.set_job_status(job_id, new_status) {
-            Err(OcyError::BadRequest(_)) => (),
+            Err(OcyError::Conflict(_)) => (),
             x => assert!(false, "Unexpected result when changing status Completed -> {}: {:?}", new_status, x),
         }
     }

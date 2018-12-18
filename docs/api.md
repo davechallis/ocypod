@@ -1,5 +1,14 @@
 # API
 
+In general, Ocypod attempts to return meaningful HTTP status codes to indicate
+whether an operation was successful or not.
+
+As well as the status codes detailed per endpoint, Ocypod will also return
+the following _5xx_ codes:
+
+* 500 - unexpected internal error
+* 503 - Redis connection unavailable
+
 ## Queue endpoints
 
 Used for interacting with queues.
@@ -231,7 +240,7 @@ All fields are optional, only fields that are present will cause any changes.
 * 204 - job successfully updated
 * 400 - invalid or no JSON sent
 * 404 - no job with given ID exists
-
+* 409 - job is in state where status or output update is not allowed
 
 #### Example
 
@@ -305,8 +314,9 @@ Set a job's `output` field to given JSON. This has the same effect as updating u
 #### Response
 
 * 204 - job's output field successfully set
+* 400 - invalid or no JSON provided
 * 404 - job with given ID does not exist
-* 409 - job is not in a valid state
+* 409 - job is not in a state where output can be update (e.g. job is already completed/cancelled)
 
 #### Example
 

@@ -24,6 +24,9 @@ pub enum OcyError {
 
     /// Could not complete request with given parameters.
     BadRequest(String),
+
+    /// Request was not valid due to current state of some resource(s).
+    Conflict(String),
 }
 
 impl From<RedisError> for OcyError {
@@ -39,7 +42,7 @@ impl fmt::Display for OcyError {
             OcyError::RedisConnection(msg) => write!(f, "Failed to connect to Redis: {}", msg),
             OcyError::NoSuchQueue(queue)   => write!(f, "Queue '{}' does not exist", queue),
             OcyError::NoSuchJob(job_id)    => write!(f, "Job with ID {} does not exist", job_id),
-            OcyError::BadRequest(msg)      => write!(f, "{}", msg),
+            OcyError::BadRequest(msg) | OcyError::Conflict(msg) => write!(f, "{}", msg),
         }
     }
 }
@@ -52,6 +55,7 @@ impl Error for OcyError {
             OcyError::NoSuchQueue(_)     => None,
             OcyError::NoSuchJob(_)       => None,
             OcyError::BadRequest(_)      => None,
+            OcyError::Conflict(_)        => None,
         }
     }
 }

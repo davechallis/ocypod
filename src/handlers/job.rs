@@ -105,6 +105,7 @@ pub fn status(
 /// * 204 - update successfully performed
 /// * 400 - bad request, could not perform update with given JSON request
 /// * 404 - not found error if no job with given `job_id` is found
+/// * 409 - conflict, job not in state where updates allowed
 /// * 500 - unexpected internal error
 /// * 503 - Redis connection unavailable
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
@@ -120,6 +121,7 @@ pub fn update(
             match res {
                 Ok(_)                          => Ok(HttpResponse::NoContent().into()),
                 Err(OcyError::BadRequest(msg)) => Ok(HttpResponse::BadRequest().body(msg)),
+                Err(OcyError::Conflict(msg))   => Ok(HttpResponse::Conflict().body(msg)),
                 Err(OcyError::NoSuchJob(_))    => Ok(HttpResponse::NotFound().into()),
                 Err(OcyError::RedisConnection(err)) => {
                     error!("[job:{}] failed to update metadata: {}", job_id, err);
@@ -156,7 +158,7 @@ pub fn heartbeat(
             match res {
                 Ok(_)                          => Ok(HttpResponse::NoContent().reason("Heartbeat updated").finish()),
                 Err(OcyError::NoSuchJob(_))    => Ok(HttpResponse::NotFound().into()),
-                Err(OcyError::BadRequest(msg)) => Ok(HttpResponse::Conflict().body(msg)),
+                Err(OcyError::Conflict(msg))   => Ok(HttpResponse::Conflict().body(msg)),
                 Err(OcyError::RedisConnection(err)) => {
                     error!("[job:{}] failed to update heartbeat: {}", job_id, err);
                     Ok(HttpResponse::ServiceUnavailable().body(err.to_string()))
@@ -264,7 +266,8 @@ pub fn set_output(
             match res {
                 Ok(_)                          => Ok(HttpResponse::NoContent().into()),
                 Err(OcyError::NoSuchJob(_))    => Ok(HttpResponse::NotFound().reason("Job Not Found").finish()),
-                Err(OcyError::BadRequest(msg)) => Ok(HttpResponse::Conflict().body(msg)),
+                Err(OcyError::BadRequest(msg)) => Ok(HttpResponse::BadRequest().body(msg)),
+                Err(OcyError::Conflict(msg))   => Ok(HttpResponse::Conflict().body(msg)),
                 Err(OcyError::RedisConnection(err)) => {
                     error!("[job:{}] failed set output: {}", job_id, err);
                     Ok(HttpResponse::ServiceUnavailable().body(err.to_string()))

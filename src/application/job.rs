@@ -244,7 +244,7 @@ impl<'a> RedisJob<'a> {
     ) -> OcyResult<&'b mut Pipeline> {
         match self.status()? {
             job::Status::Running => Ok(pipe.hset(&self.key, job::Field::Output, value.to_string())),
-            _                    => Err(OcyError::BadRequest("Can only set output for running jobs".to_string())),
+            _                    => Err(OcyError::Conflict("Can only set output for running jobs".to_string())),
         }
     }
 
@@ -292,7 +292,7 @@ impl<'a> RedisJob<'a> {
             (job::Status::Cancelled, job::Status::Queued)         => self.requeue(pipe, false)?,
             (job::Status::Failed, job::Status::Queued)            => self.requeue(pipe, false)?,
             (job::Status::TimedOut, job::Status::Queued)          => self.requeue(pipe, false)?,
-            (from, to) => return Err(OcyError::BadRequest(format!("Cannot change status from {} to {}", from, to))),
+            (from, to) => return Err(OcyError::Conflict(format!("Cannot change status from {} to {}", from, to))),
         })
     }
 
@@ -301,7 +301,7 @@ impl<'a> RedisJob<'a> {
         transaction(self.conn, &[&self.key], |pipe| {
             // only existing/running jobs can have heartbeat updated
             if self.status()? != job::Status::Running {
-                return Err(OcyError::BadRequest(format!("Cannot heartbeat job {}, job is not running", self.id)));
+                return Err(OcyError::Conflict(format!("Cannot heartbeat job {}, job is not running", self.id)));
             }
 
             Ok(pipe
