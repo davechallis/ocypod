@@ -1,9 +1,7 @@
 # Writing a worker
 
 One of the goals of Ocypod is to make writing clients/workers a
- straightforward process, since all communication takes place using HTTP.
-It's also designed to be fairly flexible, to allow for different
-patterns/workflows.
+ straightforward process, since all communication takes place using HTTP/JSON.
 
 The simplest possible worker would generally do the following in a loop:
 
@@ -15,7 +13,7 @@ A more fully featured client might do the following:
 
 1. poll a queue (or queues) for a job to work on
 2. start processing a job
-3. send regular job heartbeat to let ocypod know the worker is alive
+3. send regular job heartbeat to let Ocypod know the worker is alive
 4. update the job's `output` field with progress information
 5. when job is complete, update the job's status to `completed`, and update it's `output` to contain the final result
 

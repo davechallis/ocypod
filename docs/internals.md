@@ -1,12 +1,21 @@
 # Internal design
 
-The focus of this server was to handle a common way for multiple languages/services to deal with background jobs in a common way, especially for dealing with jobs that may take hours/days to run.
+The focus of this server was to handle a common way for multiple
+languages/services to deal with background jobs in a common way, especially
+for dealing with jobs that may take hours/days to run.
 
-Designing for the very high throughput low-latency use case (e.g. tens of thousands of workers, millions of jobs per day) was not a focus for this project, there are plenty of good systems out there which deal with that very well.
+Designing for the very high throughput low-latency use case (e.g. tens of
+thousands of workers, millions of jobs per day) was not a focus for this
+project, there are plenty of good systems out there which deal with that very
+well.
 
-Ocypod makes heavy use of [Redis transactions](https://redis.io/topics/transactions), in order to allow clients/workers to modify jobs as they are in progress, while ensuring the integrity of the system.
+Ocypod makes heavy use of [Redis transactions](https://redis.io/topics/transactions),
+in order to allow clients/workers to modify jobs as they are in progress,
+while ensuring the integrity of the system.
 
-The `ocypod-server` itself is stateless, so there should theoretically be no issues with running multiple instances of the server with the same Redis instance as a backend.
+The `ocypod-server` itself is stateless, so there should be no issues with
+running multiple instances of the server with the same Redis instance as a
+backend.
 
 Internally, several Redis data structures are used:
 
@@ -21,7 +30,8 @@ Internally, several Redis data structures are used:
 * `queue:{queue_name}` - hash containing a queue's settings
 * `queue:{queue_name}:jobs` - list containing queued job IDs, used as a FIFO
 
-The ocypod-server runs three background tasks which monitor different queues and modify job state as necessary:
+The ocypod-server runs three background tasks which monitor different queues
+and modify job state as necessary:
 
 * timeout check - checks all jobs in the `running` queue for timeouts or heartbeat times, and moves them to the `failed` queue as necessary
 * retry check - checks all jobs in the `failed` queue for retry eligibility, and re-queues them on their original queue if elibible, otherwise this moves them to the `ended` queue
