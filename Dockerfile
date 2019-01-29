@@ -1,5 +1,5 @@
 # Statically compile with optimisations in the build image
-FROM ekidd/rust-musl-builder:1.31.0 AS builder
+FROM ekidd/rust-musl-builder:1.32.0 AS builder
 COPY . ./
 RUN sudo chown -R rust:rust /home/rust && cargo fetch
 RUN cargo build --release

@@ -2,7 +2,7 @@
 
 use actix_web::{server, App, http, middleware::Logger};
 use actix::prelude::{Actor, SyncArbiter};
-use log::{debug, info};
+use log::{debug, info, warn};
 use num_cpus;
 
 use ocypod::{config, models::ApplicationState};
@@ -195,7 +195,10 @@ fn parse_config_from_cli_args(matches: &clap::ArgMatches) -> config::Config {
                 },
             }
         },
-        None => config::Config::default(),
+        None => {
+            warn!("No config file specified, using default config");
+            config::Config::default()
+        }
     };
 
     // validate config settings
