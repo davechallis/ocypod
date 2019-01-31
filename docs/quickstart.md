@@ -49,7 +49,7 @@ basis).
 
 Next, verify that the newly created queue exists, and see its full configuration:
 
-    $ curl localhost:8023/queue/example
+    $ curl localhost:8023/queue/demo
     {"timeout":"10m",
      "heartbeat_timeout":"0s",
      "expires_after":"5m",
