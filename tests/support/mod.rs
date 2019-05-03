@@ -2,10 +2,11 @@
 
 // Copied from: https://github.com/mitsuhiko/redis-rs/blob/master/tests/support/mod.rs
 
+extern crate futures;
 extern crate net2;
 extern crate rand;
 
-use redis::{self, RedisFuture};
+use redis;
 
 use std::env;
 use std::fs;
@@ -14,6 +15,10 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use std::path::PathBuf;
+
+use self::futures::Future;
+
+use redis::RedisError;
 
 #[derive(PartialEq)]
 enum ServerType {
@@ -32,11 +37,11 @@ impl ServerType {
             .ok()
             .as_ref()
             .map(|x| &x[..])
-        {
-            Some("tcp") => ServerType::Tcp,
-            Some("unix") => ServerType::Unix,
-            _ => ServerType::Tcp,
-        }
+            {
+                Some("tcp") => ServerType::Tcp,
+                Some("unix") => ServerType::Unix,
+                _ => ServerType::Tcp,
+            }
     }
 }
 
@@ -120,17 +125,20 @@ impl TestContext {
             addr: Box::new(server.get_client_addr().clone()),
             db: 0,
             passwd: None,
-        }).unwrap();
+        })
+            .unwrap();
         let con;
 
         let millisecond = Duration::from_millis(1);
         loop {
             match client.get_connection() {
-                Err(err) => if err.is_connection_refusal() {
-                    sleep(millisecond);
-                } else {
-                    panic!("Could not connect: {}", err);
-                },
+                Err(err) => {
+                    if err.is_connection_refusal() {
+                        sleep(millisecond);
+                    } else {
+                        panic!("Could not connect: {}", err);
+                    }
+                }
                 Ok(x) => {
                     con = x;
                     break;
@@ -149,7 +157,9 @@ impl TestContext {
         self.client.get_connection().unwrap()
     }
 
-    pub fn async_connection(&self) -> RedisFuture<redis::r#async::Connection> {
+    pub fn async_connection(
+        &self,
+    ) -> impl Future<Item = redis::r#async::Connection, Error = RedisError> {
         self.client.get_async_connection()
     }
 
@@ -157,7 +167,9 @@ impl TestContext {
         self.server.stop();
     }
 
-    pub fn shared_async_connection(&self) -> RedisFuture<redis::r#async::SharedConnection> {
+    pub fn shared_async_connection(
+        &self,
+    ) -> impl Future<Item = redis::r#async::SharedConnection, Error = RedisError> {
         self.client.get_shared_async_connection()
     }
 }
