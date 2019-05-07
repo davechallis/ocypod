@@ -5,7 +5,8 @@ use futures::{future, Future};
 use log::error;
 use serde_derive::*;
 
-use actix_web::{self, Path, State, Json, Query, AsyncResponder, HttpResponse};
+use actix_web::{self, HttpResponse};
+use actix_web::web::{Json, Path, Query, Data};
 
 use crate::actors::application;
 use crate::models::{ApplicationState, job, OcyError};
@@ -27,9 +28,10 @@ pub struct JobFields {
 /// * 503 - Redis connection unavailable
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn index(
-    (path, query): (Path<u64>, Query<JobFields>),
-    state: State<ApplicationState>
-) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
+    path: Path<u64>,
+    query: Query<JobFields>,
+    data: Data<ApplicationState>,
+) -> Box<Future<Item=HttpResponse, Error=()>> {
     let job_id = path.into_inner();
     let fields = match query.into_inner().fields {
         Some(raw_fields) => {
@@ -45,10 +47,13 @@ pub fn index(
         None => None,
     };
 
-    state.redis_addr.send(application::GetJobFields(job_id, fields))
-        .from_err()
-        .and_then(move |res| {
-            match res {
+    Box::new(data.redis_addr.send(application::GetJobFields(job_id, fields))
+        .then(move |res| {
+            let msg = match res {
+                Ok(msg) => msg,
+                Err(err) => Err(OcyError::Internal(err.to_string())),
+            };
+            match msg {
                 Ok(job)                     => Ok(HttpResponse::Ok().json(job)),
                 Err(OcyError::NoSuchJob(_)) => Ok(HttpResponse::NotFound().into()),
                 Err(OcyError::RedisConnection(err)) => {
@@ -60,8 +65,7 @@ pub fn index(
                     Ok(HttpResponse::InternalServerError().body(err.to_string()))
                 },
             }
-        })
-        .responder()
+        }))
 }
 
 /// Handles `GET /job/{job_id}/status` requests.
@@ -75,26 +79,32 @@ pub fn index(
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn status(
     path: Path<u64>,
-    state: State<ApplicationState>
-) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
+    data: Data<ApplicationState>
+) -> impl Future<Item=HttpResponse, Error=actix_web::Error> {
     let job_id = path.into_inner();
-    state.redis_addr.send(application::GetJobStatus(job_id))
-        .from_err()
-        .and_then(move |res| {
+    data.redis_addr.send(application::GetJobStatus(job_id))
+        .then(move |res| {
             match res {
-                Ok(status)                  => Ok(HttpResponse::Ok().json(status)),
-                Err(OcyError::NoSuchJob(_)) => Ok(HttpResponse::NotFound().into()),
-                Err(OcyError::RedisConnection(err)) => {
-                    error!("[job:{}] failed to fetch status: {}", job_id, err);
-                    Ok(HttpResponse::ServiceUnavailable().body(err.to_string()))
+                Ok(msg) => {
+                    match msg {
+                        Ok(status)                  => Ok(HttpResponse::Ok().json(status)),
+                        Err(OcyError::NoSuchJob(_)) => Ok(HttpResponse::NotFound().into()),
+                        Err(OcyError::RedisConnection(err)) => {
+                            error!("[job:{}] failed to fetch status: {}", job_id, err);
+                            Ok(HttpResponse::ServiceUnavailable().body(err.to_string()))
+                        },
+                        Err(err)                    => {
+                            error!("[job:{}] failed to fetch status: {}", job_id, err);
+                            Ok(HttpResponse::InternalServerError().body(err.to_string()))
+                        },
+                    }
                 },
-                Err(err)                    => {
+                Err(err) => {
                     error!("[job:{}] failed to fetch status: {}", job_id, err);
                     Ok(HttpResponse::InternalServerError().body(err.to_string()))
                 },
             }
         })
-        .responder()
 }
 
 /// Handles `PATCH /job/{job_id}` requests. This endpoint allows a job's status and/or output to
@@ -110,30 +120,37 @@ pub fn status(
 /// * 503 - Redis connection unavailable
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn update(
-    (path, json): (Path<u64>, Json<job::UpdateRequest>),
-    state: State<ApplicationState>
-) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
+    path: Path<u64>,
+    json: Json<job::UpdateRequest>,
+    data: Data<ApplicationState>,
+) -> impl Future<Item=HttpResponse, Error=actix_web::Error> {
     let job_id = path.into_inner();
     let update_req = json.into_inner();
-    state.redis_addr.send(application::UpdateJob(job_id, update_req))
-        .from_err()
-        .and_then(move |res| {
+    data.redis_addr.send(application::UpdateJob(job_id, update_req))
+        .then(move |res| {
             match res {
-                Ok(_)                          => Ok(HttpResponse::NoContent().into()),
-                Err(OcyError::BadRequest(msg)) => Ok(HttpResponse::BadRequest().body(msg)),
-                Err(OcyError::Conflict(msg))   => Ok(HttpResponse::Conflict().body(msg)),
-                Err(OcyError::NoSuchJob(_))    => Ok(HttpResponse::NotFound().into()),
-                Err(OcyError::RedisConnection(err)) => {
-                    error!("[job:{}] failed to update metadata: {}", job_id, err);
-                    Ok(HttpResponse::ServiceUnavailable().body(err.to_string()))
+                Ok(msg) => {
+                    match msg {
+                        Ok(_) => Ok(HttpResponse::NoContent().into()),
+                        Err(OcyError::BadRequest(msg)) => Ok(HttpResponse::BadRequest().body(msg)),
+                        Err(OcyError::Conflict(msg)) => Ok(HttpResponse::Conflict().body(msg)),
+                        Err(OcyError::NoSuchJob(_)) => Ok(HttpResponse::NotFound().into()),
+                        Err(OcyError::RedisConnection(err)) => {
+                            error!("[job:{}] failed to update metadata: {}", job_id, err);
+                            Ok(HttpResponse::ServiceUnavailable().body(err.to_string()))
+                        },
+                        Err(err) => {
+                            error!("[job:{}] failed to update metadata: {}", job_id, err);
+                            Ok(HttpResponse::InternalServerError().body(err.to_string()))
+                        },
+                    }
                 },
-                Err(err)                       => {
+                Err(err) => {
                     error!("[job:{}] failed to update metadata: {}", job_id, err);
                     Ok(HttpResponse::InternalServerError().body(err.to_string()))
                 },
             }
         })
-        .responder()
 }
 
 /// Handles `PUT /job/{job_id}/heartbeat` requests. This endpoint updates the last heartbeat time
@@ -149,12 +166,12 @@ pub fn update(
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn heartbeat(
     path: Path<u64>,
-    state: State<ApplicationState>
-) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
+    data: Data<ApplicationState>
+) -> impl Future<Item=HttpResponse, Error=actix_web::Error> {
     let job_id = path.into_inner();
-    state.redis_addr.send(application::Heartbeat(job_id))
-        .from_err()
-        .and_then(move |res| {
+    data.redis_addr.send(application::Heartbeat(job_id))
+        .map_err(|err| OcyError::Internal(err.to_string()))
+        .then(move |res| {
             match res {
                 Ok(_)                          => Ok(HttpResponse::NoContent().reason("Heartbeat updated").finish()),
                 Err(OcyError::NoSuchJob(_))    => Ok(HttpResponse::NotFound().into()),
@@ -169,7 +186,6 @@ pub fn heartbeat(
                 },
             }
         })
-        .responder()
 }
 
 /// Handles `DELETE /job/{job_id}` requests. This endpoint deletes a job from the DB regardless of the
@@ -189,13 +205,16 @@ pub fn heartbeat(
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn delete(
     path: Path<u64>,
-    state: State<ApplicationState>
-) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
+    data: Data<ApplicationState>
+) -> impl Future<Item=HttpResponse, Error=()> {
     let job_id = path.into_inner();
-    state.redis_addr.send(application::DeleteJob(job_id))
-        .from_err()
-        .and_then(move |res| {
-            match res {
+    data.redis_addr.send(application::DeleteJob(job_id))
+        .then(move |res| {
+            let msg = match res {
+                Ok(msg) => msg,
+                Err(err) => Err(OcyError::Internal(err.to_string())),
+            };
+            match msg {
                 Ok(true)  => Ok(HttpResponse::NoContent().reason("Job deleted").finish()),
                 Ok(false) => Ok(HttpResponse::NotFound().into()),
                 Err(OcyError::RedisConnection(err)) => {
@@ -208,7 +227,6 @@ pub fn delete(
                 },
             }
         })
-        .responder()
 }
 
 /// Handles `GET /job/{job_id}/output` requests. Gets the current output for a given job.
@@ -222,13 +240,16 @@ pub fn delete(
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn output(
     path: Path<u64>,
-    state: State<ApplicationState>
-) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
+    data: Data<ApplicationState>
+) -> impl Future<Item=HttpResponse, Error=()> {
     let job_id = path.into_inner();
-    state.redis_addr.send(application::GetJobOutput(job_id))
-        .from_err()
-        .and_then(move |res| {
-            match res {
+    data.redis_addr.send(application::GetJobOutput(job_id))
+        .then(move |res| {
+            let msg = match res {
+                Ok(msg) => msg,
+                Err(err) => Err(OcyError::Internal(err.to_string())),
+            };
+            match msg {
                 Ok(v)                       => Ok(HttpResponse::Ok().json(v)),
                 Err(OcyError::NoSuchJob(_)) => Ok(HttpResponse::NotFound().reason("Job Not Found").finish()),
                 Err(OcyError::RedisConnection(err)) => {
@@ -241,7 +262,6 @@ pub fn output(
                 },
             }
         })
-        .responder()
 }
 
 /// Handles `PUT /job/{job_id}/output` requests. Replaces the job's output with given JSON.
@@ -255,15 +275,19 @@ pub fn output(
 /// * 503 - Redis connection unavailable
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn set_output(
-    (path, json): (Path<u64>, Json<serde_json::Value>),
-    state: State<ApplicationState>
-) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
+    path: Path<u64>,
+    json: Json<serde_json::Value>,
+    data: Data<ApplicationState>,
+) -> impl Future<Item=HttpResponse, Error=()> {
     let job_id = path.into_inner();
     let value = json.into_inner();
-    state.redis_addr.send(application::SetJobOutput(job_id, value))
-        .from_err()
-        .and_then(move |res| {
-            match res {
+    data.redis_addr.send(application::SetJobOutput(job_id, value))
+        .then(move |res| {
+            let msg = match res {
+                Ok(msg) => msg,
+                Err(err) => Err(OcyError::Internal(err.to_string())),
+            };
+            match msg {
                 Ok(_)                          => Ok(HttpResponse::NoContent().into()),
                 Err(OcyError::NoSuchJob(_))    => Ok(HttpResponse::NotFound().reason("Job Not Found").finish()),
                 Err(OcyError::BadRequest(msg)) => Ok(HttpResponse::BadRequest().body(msg)),
@@ -278,5 +302,4 @@ pub fn set_output(
                 },
             }
         })
-        .responder()
 }
