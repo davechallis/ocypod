@@ -69,7 +69,7 @@ impl JobMeta {
         match v {
             redis::Value::Bulk(items) => {
                 let mut map = HashMap::with_capacity(fields.len());
-                for (field, item) in fields.into_iter().zip(items) {
+                for (field, item) in fields.iter().zip(items) {
                     match item {
                         redis::Value::Nil => (),
                         data              => { map.insert(field.clone(), data.to_owned()); },

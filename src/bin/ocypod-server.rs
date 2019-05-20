@@ -32,7 +32,7 @@ fn main() -> std::io::Result<()> {
         }
     };
 
-    let num_workers = config.redis.threads.unwrap_or(num_cpus::get());
+    let num_workers = config.redis.threads.unwrap_or_else(num_cpus::get);
 
     // Use 0 to signal that default should be used. This configured the max size that POST endpoints
     // will accept.
@@ -155,14 +155,14 @@ fn main() -> std::io::Result<()> {
 
     if let Some(dur) = &config.server.shutdown_timeout {
         debug!("Setting shutdown timeout to {}", dur);
-        http_server = http_server.shutdown_timeout(dur.as_secs() as u16);
+        http_server = http_server.shutdown_timeout(dur.as_secs());
     }
 
     // start HTTP service and actor system
     info!("Starting queue server at: {}", &http_server_addr);
 
     http_server.bind(&http_server_addr)
-        .expect(&format!("Failed to bind to: {}", &http_server_addr))
+        .unwrap_or_else(|_| panic!("Failed to bind to: {}", &http_server_addr))
         .run()
 }
 
