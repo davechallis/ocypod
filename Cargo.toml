@@ -15,6 +15,7 @@ appveyor = { repository = "davechallis/ocypod" }
 [dependencies]
 actix-web = "1.0"
 actix = "0.8"
+actix-rt = "0.2"
 clap = "2.33"
 env_logger = "0.6"
 chrono = { version = "0.4", features = ["serde"] }

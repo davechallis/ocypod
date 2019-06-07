@@ -934,6 +934,7 @@ name = "ocypod"
 version = "0.2.1"
 dependencies = [
  "actix 0.8.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "actix-rt 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-web 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",

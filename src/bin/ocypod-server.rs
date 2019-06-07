@@ -1,6 +1,6 @@
 //! Main executable that runs the HTTP server for the queue application.
 
-use actix_web::{web, HttpServer, App};
+use actix_web::{web, HttpServer, App, HttpResponse};
 use actix::prelude::{Actor, SyncArbiter};
 use log::{debug, info, warn};
 use num_cpus;
@@ -43,23 +43,24 @@ fn main() -> std::io::Result<()> {
         0
     };
 
+    let system = actix_rt::System::new("ocypod");
+
+    let config_copy = config.clone();
+    let redis_client_copy = redis_client.clone();
+
+    // start N sync workers
+    debug!("Starting {} Redis worker(s)", num_workers);
+    let redis_addr = SyncArbiter::start(num_workers, move || {
+        ApplicationActor::new(redis_client_copy.clone())
+    });
+    info!("{} Redis worker(s) started", num_workers);
+
+    // start actor that executes periodic tasks
+    let _monitor_addr = MonitorActor::new(redis_addr.clone(), &config_copy.server).start();
+
     // Set up HTTP server routing. Each endpoint has access to the ApplicationState struct, allowing them to send
     // messages to the RedisActor (which performs task queue operations).
-    let config_copy = config.clone();
     let mut http_server = HttpServer::new(move || {
-
-        let redis_client_copy = redis_client.clone();
-
-        // start N sync workers
-        debug!("Starting {} Redis worker(s)", num_workers);
-        let redis_addr = SyncArbiter::start(num_workers, move || {
-            ApplicationActor::new(redis_client_copy.clone())
-        });
-        info!("{} Redis worker(s) started", num_workers);
-
-        // start actor that executes periodic tasks
-        let _monitor_addr = MonitorActor::new(redis_addr.clone(), &config_copy.server).start();
-
         App::new()
             // add middleware logger for access log, if required
             .wrap(actix_web::middleware::Logger::default())
@@ -72,6 +73,7 @@ fn main() -> std::io::Result<()> {
             ))
 
             .data(ApplicationState::new(redis_addr.clone(), config_copy.clone()))
+
             // get a summary of the Ocypod system as a whole, e.g. number of jobs in queues, job states, etc.
             .service(
                 web::scope("/info")
@@ -107,13 +109,13 @@ fn main() -> std::io::Result<()> {
                     .service(
                         web::resource("/{id}")
                             // get all metadata about a single job with given ID
-                            .route(web::get()).to_async(handlers::job::index)
+                            .route(web::get().to_async(handlers::job::index))
 
                             // update one of more fields (including status) of given job
                             .route(web::patch().to_async(handlers::job::update))
 
                             // delete a job from the queue DB
-                            .route(web::delete()).to_async(handlers::job::delete)
+                            .route(web::delete().to_async(handlers::job::delete))
                     )
             )
 
@@ -122,7 +124,7 @@ fn main() -> std::io::Result<()> {
                     .service(
                         web::resource("/{name}/job")
                             // get the next job to work on from given queue
-                            .route(web::get()).to_async(handlers::queue::next_job)
+                            .route(web::get().to_async(handlers::queue::next_job))
 
                             // create a new job on given queue
                             .route(web::post().to_async(handlers::queue::create_job))
@@ -133,13 +135,13 @@ fn main() -> std::io::Result<()> {
 
                     .service(
                         web::resource("/{name}")
-                            .route(web::get()).to_async(handlers::queue::settings)
+                            .route(web::get().to_async(handlers::queue::settings))
 
                             // create a new queue, or update an existing one with given settings
-                            .route(web::put()).to_async(handlers::queue::create_or_update)
+                            .route(web::put().to_async(handlers::queue::create_or_update))
 
                             // delete a queue and all currently queued jobs on it
-                            .route(web::delete()).to_async(handlers::queue::delete)
+                            .route(web::delete().to_async(handlers::queue::delete))
                     )
 
                     // get a list of all queue names
@@ -163,7 +165,8 @@ fn main() -> std::io::Result<()> {
 
     http_server.bind(&http_server_addr)
         .unwrap_or_else(|_| panic!("Failed to bind to: {}", &http_server_addr))
-        .run()
+        .start();
+    system.run()
 }
 
 /// Defines and parses CLI argument for this server.
