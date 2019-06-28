@@ -1,3 +1,7 @@
+# Unreleased
+
+* Migrated codebase to use actix-web 1.0
+
 # 0.2.0 (2018-12-17)
 
 * Migrated to Rust 2018 edition.

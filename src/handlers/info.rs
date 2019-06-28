@@ -1,7 +1,8 @@
 //! Handlers for getting general information about the Ocypod server as a whole.
 
 use futures::Future;
-use actix_web::{self, AsyncResponder, HttpRequest, HttpResponse};
+use actix_web::{self, HttpRequest, HttpResponse};
+use actix_web::web::Data;
 use log::error;
 
 use crate::actors::application;
@@ -14,11 +15,14 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// # Returns
 ///
 /// * 200 - JSON containing summary of server information
-pub fn index(req: &HttpRequest<ApplicationState>) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
-    req.state().redis_addr.send(application::GetInfo)
-        .from_err()
-        .and_then(|res| {
-            match res {
+pub fn index(data: Data<ApplicationState>) -> impl Future<Item=HttpResponse, Error=()> {
+    data.redis_addr.send(application::GetInfo)
+        .then(|res| {
+            let msg = match res {
+                Ok(msg) => msg,
+                Err(err) => Err(OcyError::Internal(err.to_string())),
+            };
+            match msg {
                 Ok(summary) => Ok(HttpResponse::Ok().json(summary)),
                 Err(OcyError::RedisConnection(err)) => {
                     error!("Failed to fetch summary data: {}", err);
@@ -30,10 +34,9 @@ pub fn index(req: &HttpRequest<ApplicationState>) -> Box<Future<Item=HttpRespons
                 },
             }
         })
-        .responder()
 }
 
 /// Handles `GET /info/version` requests.
-pub fn version(_: &HttpRequest<ApplicationState>) -> HttpResponse {
+pub fn version(_: HttpRequest) -> HttpResponse {
     HttpResponse::Ok().json(VERSION)
 }

@@ -1,6 +1,6 @@
 //! Main executable that runs the HTTP server for the queue application.
 
-use actix_web::{server, App, http, middleware::Logger};
+use actix_web::{web, HttpServer, App, HttpResponse};
 use actix::prelude::{Actor, SyncArbiter};
 use log::{debug, info, warn};
 use num_cpus;
@@ -9,14 +9,14 @@ use ocypod::{config, models::ApplicationState};
 use ocypod::actors::{application::ApplicationActor, monitor::MonitorActor};
 use ocypod::handlers;
 
-fn main() {
+fn main() -> std::io::Result<()> {
     let config = parse_config_from_cli_args(&parse_cli_args());
 
     // TODO: is env_logger the best choice here, or would slog be preferable?
     {
         let log_settings = format!("ocypod={},ocypod-server={}", config.server.log_level, config.server.log_level);
         env_logger::Builder::new()
-            .parse(&log_settings)
+            .parse_filters(&log_settings)
             .default_format_module_path(false)
             .init();
         debug!("Log initialised using: {}", &log_settings);
@@ -32,20 +32,7 @@ fn main() {
         }
     };
 
-    // initialise Actix actor system
-    let sys = actix::System::new("ocypod");
-
-    let num_workers = config.redis.threads.unwrap_or(num_cpus::get());
-
-    // start N sync workers
-    debug!("Starting {} Redis worker(s)", num_workers);
-    let redis_addr = SyncArbiter::start(num_workers, move || {
-        ApplicationActor::new(redis_client.clone())
-    });
-    info!("{} Redis worker(s) started", num_workers);
-
-    // start actor that executes periodic tasks
-    let _monitor_addr = MonitorActor::new(redis_addr.clone(), &config.server).start();
+    let num_workers = config.redis.threads.unwrap_or_else(num_cpus::get);
 
     // Use 0 to signal that default should be used. This configured the max size that POST endpoints
     // will accept.
@@ -56,100 +43,110 @@ fn main() {
         0
     };
 
+    let system = actix_rt::System::new("ocypod");
+
+    let config_copy = config.clone();
+    let redis_client_copy = redis_client.clone();
+
+    // start N sync workers
+    debug!("Starting {} Redis worker(s)", num_workers);
+    let redis_addr = SyncArbiter::start(num_workers, move || {
+        ApplicationActor::new(redis_client_copy.clone())
+    });
+    info!("{} Redis worker(s) started", num_workers);
+
+    // start actor that executes periodic tasks
+    let _monitor_addr = MonitorActor::new(redis_addr.clone(), &config_copy.server).start();
+
     // Set up HTTP server routing. Each endpoint has access to the ApplicationState struct, allowing them to send
     // messages to the RedisActor (which performs task queue operations).
-    let config_copy = config.clone();
-    let mut http_server = server::new(move || {
-        App::with_state(ApplicationState::new(redis_addr.clone(), config_copy.clone()))
+    let mut http_server = HttpServer::new(move || {
+        App::new()
+            // add middleware logger for access log, if required
+            .wrap(actix_web::middleware::Logger::default())
+            .data(web::JsonConfig::default().limit(
+                if max_body_size > 0 {
+                    max_body_size
+                } else {
+                    1024
+                }
+            ))
+
+            .data(ApplicationState::new(redis_addr.clone(), config_copy.clone()))
+
             // get a summary of the Ocypod system as a whole, e.g. number of jobs in queues, job states, etc.
-            .scope("/info", |info_scope| {
-                info_scope
+            .service(
+                web::scope("/info")
                     // get current server version
-                    .resource("/version", |r| r.f(handlers::info::version))
+                    .service(web::resource("/version").to(handlers::info::version))
 
                     // get summary of system/queue information
-                    .resource("", |r| r.f(handlers::info::index))
-            })
+                    .service(web::resource("").to_async(handlers::info::index))
+            )
 
             // run basic health check by pinging Redis
-            .resource("/health", |r| r.f(handlers::health::index))
+            .service(web::resource("/health").to_async(handlers::health::index))
 
             // get list of job IDs for a given tag
-            .resource("/tag/{name}", |r| r.method(http::Method::GET).with(handlers::tag::tagged_jobs))
+            .service(
+                web::resource("/tag/{name}")
+                    .route(web::get().to_async(handlers::tag::tagged_jobs)))
 
-            .scope("/job", |job_scope| {
-                job_scope
+            .service(
+                web::scope("/job")
                     // get the current status of a job with given ID
-                    .resource("/{id}/status", |r| r.method(http::Method::GET).with(handlers::job::status))
-                    .resource("/{id}/output", move |r| {
-                        // TODO: deprecate this and just use fields endpoint?
-                        // get the output field of a job with given ID
-                        r.method(http::Method::GET).with(handlers::job::output);
+                    .service(web::resource("/{id}/status").route(web::get().to_async(handlers::job::status)))
 
-                        // update the output field of a job with given ID
-                        if max_body_size > 0 {
-                            r.method(http::Method::PUT)
-                                .with_config(handlers::job::set_output, |((_, cfg), _)| { cfg.limit(max_body_size); })
-                        } else {
-                            r.method(http::Method::PUT).with(handlers::job::set_output)
-                        }
-                    })
+                    .service(
+                        web::resource("/{id}/output")
+                            .route(web::get().to_async(handlers::job::set_output))
+                            .route(web::put().to_async(handlers::job::set_output))
+                    )
 
                     // update job's last heartbeat date/time
-                    .resource("/{id}/heartbeat", |r| r.method(http::Method::PUT).with(handlers::job::heartbeat))
+                    .service(web::resource("/{id}/heartbeat").route(web::put().to_async(handlers::job::heartbeat)))
 
-                    .resource("/{id}", move |r| {
-                        // get all metadata about a single job with given ID
-                        r.method(http::Method::GET).with(handlers::job::index);
+                    .service(
+                        web::resource("/{id}")
+                            // get all metadata about a single job with given ID
+                            .route(web::get().to_async(handlers::job::index))
 
-                        // update one of more fields (including status) of given job
-                        if max_body_size > 0 {
-                            r.method(http::Method::PATCH)
-                                .with_config(handlers::job::update, |((_, cfg), _)| { cfg.limit(max_body_size); });
-                        } else {
-                            r.method(http::Method::PATCH).with(handlers::job::update);
-                        }
+                            // update one of more fields (including status) of given job
+                            .route(web::patch().to_async(handlers::job::update))
 
-                        // delete a job from the queue DB
-                        r.method(http::Method::DELETE).with(handlers::job::delete)
-                    })
-            })
+                            // delete a job from the queue DB
+                            .route(web::delete().to_async(handlers::job::delete))
+                    )
+            )
 
-            .scope("/queue", |queue_scope| {
-                queue_scope
-                    .resource("/{name}/job", move |r| {
-                        // get the next job to work on from given queue
-                        r.method(http::Method::GET).with(handlers::queue::next_job);
+            .service(
+                web::scope("/queue")
+                    .service(
+                        web::resource("/{name}/job")
+                            // get the next job to work on from given queue
+                            .route(web::get().to_async(handlers::queue::next_job))
 
-                        // create a new job on given queue
-                        if max_body_size > 0 {
-                            r.method(http::Method::POST)
-                                .with_config(handlers::queue::create_job, |((_, cfg), _)| { cfg.limit(max_body_size); })
-                        } else {
-                            r.method(http::Method::POST).with(handlers::queue::create_job)
-                        }
-                    })
+                            // create a new job on given queue
+                            .route(web::post().to_async(handlers::queue::create_job))
+                    )
 
                     // get queue size
-                    .resource("/{name}/size", |r| r.method(http::Method::GET).with(handlers::queue::size))
+                    .service(web::resource("/{name}/size").route(web::get()).to_async(handlers::queue::size))
 
-                    .resource("/{name}", |r| {
-                        // get current queue settings settings, etc.
-                        r.method(http::Method::GET).with(handlers::queue::settings);
+                    .service(
+                        web::resource("/{name}")
+                            .route(web::get().to_async(handlers::queue::settings))
 
-                        // create a new queue, or update an existing one with given settings
-                        r.method(http::Method::PUT).with(handlers::queue::create_or_update);
+                            // create a new queue, or update an existing one with given settings
+                            .route(web::put().to_async(handlers::queue::create_or_update))
 
-                        // delete a queue and all currently queued jobs on it
-                        r.method(http::Method::DELETE).with(handlers::queue::delete)
-                    })
+                            // delete a queue and all currently queued jobs on it
+                            .route(web::delete().to_async(handlers::queue::delete))
+                    )
 
                     // get a list of all queue names
-                    .resource("", |r| r.f(handlers::queue::index))
-            })
-
-            // add middleware logger for access log, if required
-            .middleware(Logger::default())
+                    .service(web::resource("").to_async(handlers::queue::index))
+            )
     });
 
     // set number of worker threads if configured, or default to number of logical CPUs
@@ -158,18 +155,18 @@ fn main() {
         http_server = http_server.workers(num_workers);
     }
 
-    if let Some(dur) = config.server.shutdown_timeout {
+    if let Some(dur) = &config.server.shutdown_timeout {
         debug!("Setting shutdown timeout to {}", dur);
-        http_server = http_server.shutdown_timeout(dur.as_secs() as u16);
+        http_server = http_server.shutdown_timeout(dur.as_secs());
     }
-
-    http_server.bind(&http_server_addr)
-        .expect("Failed to start HTTP server")
-        .start();
 
     // start HTTP service and actor system
     info!("Starting queue server at: {}", &http_server_addr);
-    let _ = sys.run();
+
+    http_server.bind(&http_server_addr)
+        .unwrap_or_else(|_| panic!("Failed to bind to: {}", &http_server_addr))
+        .start();
+    system.run()
 }
 
 /// Defines and parses CLI argument for this server.

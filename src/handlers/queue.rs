@@ -4,7 +4,8 @@ use std::time::Instant;
 
 use log::error;
 use futures::{future, Future};
-use actix_web::{self, Path, State, AsyncResponder, HttpRequest, HttpResponse, Json};
+use actix_web::{self, HttpResponse};
+use actix_web::web::{Data, Path, Json};
 
 use crate::actors::application;
 use crate::models::{ApplicationState, job, queue, OcyError};
@@ -14,12 +15,14 @@ use crate::models::{ApplicationState, job, queue, OcyError};
 /// # Returns
 ///
 /// * 200 - JSON response containing list of queue names.
-#[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
-pub fn index(req: &HttpRequest<ApplicationState>) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
-    req.state().redis_addr.send(application::GetQueueNames)
-        .from_err()
-        .and_then(|res| {
-            match res {
+pub fn index(data: Data<ApplicationState>) -> impl Future<Item=HttpResponse, Error=()> {
+    data.redis_addr.send(application::GetQueueNames)
+        .then(|res| {
+            let msg = match res {
+                Ok(msg) => msg,
+                Err(err) => Err(OcyError::Internal(err.to_string())),
+            };
+            match msg {
                 Ok(queue_names) => Ok(HttpResponse::Ok().json(queue_names)),
                 Err(OcyError::RedisConnection(err)) => {
                     error!("Failed to fetch queue names: {}", err);
@@ -31,21 +34,23 @@ pub fn index(req: &HttpRequest<ApplicationState>) -> Box<Future<Item=HttpRespons
                 },
             }
         })
-        .responder()
 }
 
 /// Handles `PUT /queue/{queue_name}` requests.
-#[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn create_or_update(
-    (path, json): (Path<String>, Json<queue::Settings>),
-    state: State<ApplicationState>
-) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
+    path: Path<String>,
+    json: Json<queue::Settings>,
+    data: Data<ApplicationState>,
+) -> impl Future<Item=HttpResponse, Error=()> {
     let queue_name = path.into_inner();
     let queue_settings = json.into_inner();
-    state.redis_addr.send(application::CreateOrUpdateQueue(queue_name.to_owned(), queue_settings))
-        .from_err()
-        .and_then(move |res| {
-            match res {
+    data.redis_addr.send(application::CreateOrUpdateQueue(queue_name.to_owned(), queue_settings))
+        .then(move |res| {
+            let msg = match res {
+                Ok(msg) => msg,
+                Err(err) => Err(OcyError::Internal(err.to_string())),
+            };
+            match msg {
                 Ok(true)  => Ok(HttpResponse::Created()
                     .header("Location", format!("/queue/{}", queue_name))
                     .finish()),
@@ -64,19 +69,21 @@ pub fn create_or_update(
                 },
             }
         })
-        .responder()
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn delete(
     path: Path<String>,
-    state: State<ApplicationState>
-) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
+    data: Data<ApplicationState>
+) -> impl Future<Item=HttpResponse, Error=()> {
     let queue_name = path.into_inner();
-    state.redis_addr.send(application::DeleteQueue(queue_name.clone()))
-        .from_err()
-        .and_then(move |res| {
-            match res {
+    data.redis_addr.send(application::DeleteQueue(queue_name.clone()))
+        .then(move |res| {
+            let msg = match res {
+                Ok(msg) => msg,
+                Err(err) => Err(OcyError::Internal(err.to_string())),
+            };
+            match msg {
                 Ok(true)  => Ok(HttpResponse::NoContent().reason("Queue deleted").finish()),
                 Ok(false) => Ok(HttpResponse::NotFound().reason("Queue not found").finish()),
                 Err(OcyError::BadRequest(msg)) => Ok(HttpResponse::BadRequest().body(msg)),
@@ -90,19 +97,21 @@ pub fn delete(
                 },
             }
         })
-        .responder()
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn settings(
     path: Path<String>,
-    state: State<ApplicationState>
-) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
+    data: Data<ApplicationState>
+) -> impl Future<Item=HttpResponse, Error=()> {
     let queue_name = path.into_inner();
-    state.redis_addr.send(application::GetQueueSettings(queue_name.clone()))
-        .from_err()
-        .and_then(move |res| {
-            match res {
+    data.redis_addr.send(application::GetQueueSettings(queue_name.clone()))
+        .then(move |res| {
+            let msg = match res {
+                Ok(msg) => msg,
+                Err(err) => Err(OcyError::Internal(err.to_string())),
+            };
+            match msg {
                 Ok(summary) => Ok(HttpResponse::Ok().json(summary)),
                 Err(OcyError::NoSuchQueue(_)) => Ok(HttpResponse::NotFound().into()),
                 Err(OcyError::RedisConnection(err)) => {
@@ -115,19 +124,21 @@ pub fn settings(
                 },
             }
         })
-        .responder()
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn size(
     path: Path<String>,
-    state: State<ApplicationState>
-) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
+    data: Data<ApplicationState>
+) -> impl Future<Item=HttpResponse, Error=()> {
     let queue_name = path.into_inner();
-    state.redis_addr.send(application::GetQueueSize(queue_name.clone()))
-        .from_err()
-        .and_then(move |res| {
-            match res {
+    data.redis_addr.send(application::GetQueueSize(queue_name.clone()))
+        .then(move |res| {
+            let msg = match res {
+                Ok(msg) => msg,
+                Err(err) => Err(OcyError::Internal(err.to_string())),
+            };
+            match msg {
                 Ok(size) => Ok(HttpResponse::Ok().json(size)),
                 Err(OcyError::NoSuchQueue(_)) => Ok(HttpResponse::NotFound().into()),
                 Err(OcyError::RedisConnection(err)) => {
@@ -140,20 +151,23 @@ pub fn size(
                 },
             }
         })
-        .responder()
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn create_job(
-    (path, json): (Path<String>, Json<job::CreateRequest>),
-    state: State<ApplicationState>
-) -> Box<Future<Item=HttpResponse, Error=actix_web::Error>> {
+    path: Path<String>,
+    json: Json<job::CreateRequest>,
+    data: Data<ApplicationState>,
+) -> impl Future<Item=HttpResponse, Error=()> {
     let queue_name = path.into_inner();
     let job_req = json.into_inner();
-    state.redis_addr.send(application::CreateJob(queue_name.clone(), job_req))
-        .from_err()
-        .and_then(move |res| {
-            match res {
+    data.redis_addr.send(application::CreateJob(queue_name.clone(), job_req))
+        .then(move |res| {
+            let msg = match res {
+                Ok(msg) => msg,
+                Err(err) => Err(OcyError::Internal(err.to_string())),
+            };
+            match msg {
                 Ok(job_id) => Ok(HttpResponse::Created()
                     .header("Location", format!("/job/{}", job_id))
                     .json(job_id)),
@@ -169,21 +183,23 @@ pub fn create_job(
                 }
             }
         })
-        .responder()
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn next_job(
     path: Path<String>,
-    state: State<ApplicationState>
-) -> Box<Future<Item = HttpResponse, Error = actix_web::Error>> {
+    data: Data<ApplicationState>
+) -> impl Future<Item=HttpResponse, Error=actix_web::Error> {
     let queue_name = path.into_inner();
-    Box::new(state.redis_addr.send(application::NextJob(queue_name.clone()))
-        .from_err()
-        .and_then(move |res| {
-            match res {
+    data.redis_addr.send(application::NextJob(queue_name.clone()))
+        .then(move |res| {
+            let msg = match res {
+                Ok(msg) => msg,
+                Err(err) => Err(OcyError::Internal(err.to_string())),
+            };
+            match msg {
                 Ok(Some(job)) => future::Either::A(future::ok(HttpResponse::Ok().json(job))),
-                Ok(None) => match &state.config.server.next_job_delay {
+                Ok(None) => match &data.config.server.next_job_delay {
                     Some(delay) if !delay.is_zero() => {
                         let when = Instant::now() + delay.0;
                         let resp = tokio_timer::Delay::new(when)
@@ -203,5 +219,5 @@ pub fn next_job(
                     future::Either::A(future::ok(HttpResponse::InternalServerError().body(err.to_string())))
                 }
             }
-        }))
+        })
 }
