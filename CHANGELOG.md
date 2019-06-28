@@ -1,4 +1,4 @@
-# Unreleased
+# 0.3.0 (2019-06-28)
 
 * Migrated codebase to use actix-web 1.0
 
