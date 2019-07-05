@@ -154,6 +154,33 @@ pub fn size(
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
+pub fn job_ids(
+    path: Path<String>,
+    data: Data<ApplicationState>
+) -> impl Future<Item=HttpResponse, Error=()> {
+    let queue_name = path.into_inner();
+    data.redis_addr.send(application::GetQueueJobIds(queue_name.clone()))
+        .then(move |res| {
+            let msg = match res {
+                Ok(msg) => msg,
+                Err(err) => Err(OcyError::Internal(err.to_string())),
+            };
+            match msg {
+                Ok(size) => Ok(HttpResponse::Ok().json(size)),
+                Err(OcyError::NoSuchQueue(_)) => Ok(HttpResponse::NotFound().into()),
+                Err(OcyError::RedisConnection(err)) => {
+                    error!("[queue:{}] failed to fetch queue size: {}", &queue_name, err);
+                    Ok(HttpResponse::ServiceUnavailable().body(err.to_string()))
+                },
+                Err(err)    => {
+                    error!("[queue:{}] failed to fetch queue size: {}", &queue_name, err);
+                    Ok(HttpResponse::InternalServerError().body(err.to_string()))
+                },
+            }
+        })
+}
+
+#[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
 pub fn create_job(
     path: Path<String>,
     json: Json<job::CreateRequest>,

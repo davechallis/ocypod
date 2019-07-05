@@ -173,6 +173,10 @@ impl<'a> RedisManager<'a> {
         Ok(self.conn.llen(keys::ENDED_KEY)?)
     }
 
+    pub fn queue_job_ids(&self, queue_name: &str) -> OcyResult<HashMap<job::Status, Vec<u64>>> {
+        self.queue(&queue_name)?.job_ids()
+    }
+
     /// Check all jobs in the failed queue for retries.
     ///
     /// Any which can be retried are re-queued on the queue they were created it.

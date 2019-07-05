@@ -1,6 +1,12 @@
+# Unreleased
+
+* Added `/queue/{name}/job_ids` endpoint to return job IDs by status for a
+  given queue.
+* Fix to `/queue/{name}/size` endpoint returning 404.
+
 # 0.3.0 (2019-06-28)
 
-* Migrated codebase to use actix-web 1.0
+* Migrated codebase to use actix-web 1.0.
 
 # 0.2.0 (2018-12-17)
 

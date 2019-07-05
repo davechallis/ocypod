@@ -6,7 +6,7 @@ mod status;
 pub use self::field::Field;
 pub use self::payload::Payload;
 pub use self::request::{CreateRequest, UpdateRequest};
-pub use self::status::Status;
+pub use self::status::{ALL_STATUSES, Status};
 
 use serde_json;
 use serde::ser::{Serialize, Serializer, SerializeMap};

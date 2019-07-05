@@ -1,6 +1,6 @@
 //! Main executable that runs the HTTP server for the queue application.
 
-use actix_web::{web, HttpServer, App, HttpResponse};
+use actix_web::{web, HttpServer, App};
 use actix::prelude::{Actor, SyncArbiter};
 use log::{debug, info, warn};
 use num_cpus;
@@ -121,6 +121,10 @@ fn main() -> std::io::Result<()> {
 
             .service(
                 web::scope("/queue")
+
+                    // job IDs by state
+                    .service(web::resource("/{name}/job_ids").route(web::get().to_async(handlers::queue::job_ids)))
+
                     .service(
                         web::resource("/{name}/job")
                             // get the next job to work on from given queue
@@ -131,7 +135,7 @@ fn main() -> std::io::Result<()> {
                     )
 
                     // get queue size
-                    .service(web::resource("/{name}/size").route(web::get()).to_async(handlers::queue::size))
+                    .service(web::resource("/{name}/size").route(web::get().to_async(handlers::queue::size)))
 
                     .service(
                         web::resource("/{name}")

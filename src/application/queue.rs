@@ -6,6 +6,7 @@ use log::{debug, info};
 use crate::models::{OcyError, OcyResult, queue, job};
 use crate::redis_utils::{transaction, vec_from_redis_pipe};
 use super::{keys, RedisJob, RedisTag};
+use std::collections::HashMap;
 
 /// Interface to a queue in Redis. This consists of a list containing queued jobs, and a hash containing queue settings.
 ///
@@ -120,6 +121,41 @@ impl<'a> RedisQueue<'a> {
         } else {
             Ok(false)
         }
+    }
+
+    pub fn job_ids(&self) -> OcyResult<HashMap<job::Status, Vec<u64>>> {
+        let mut pipeline = redis::pipe();
+        let pipe = &mut pipeline;
+        let mut job_ids = HashMap::new();
+        for status in &job::ALL_STATUSES {
+            job_ids.insert(status.clone(), Vec::new());
+        }
+
+        for queue_key in &[&self.jobs_key, keys::FAILED_KEY, keys::ENDED_KEY, keys::RUNNING_KEY] {
+            for job_id in self.conn.lrange::<_, Vec<u64>>(*queue_key, 0, -1)? {
+                pipe.hget(RedisJob::new(job_id, self.conn).key(), &[job::Field::Id, job::Field::Queue, job::Field::Status]);
+            }
+        }
+
+        for (job_id, queue_name, status) in vec_from_redis_pipe::<(Option<u64>, Option<String>, Option<job::Status>)>(pipe, self.conn)? {
+            if queue_name.as_ref() != Some(&self.name) {
+                continue
+            }
+
+            let status = match status {
+                Some(status) => status,
+                None         => continue,
+            };
+
+            let job_id = match job_id {
+                Some(job_id) => job_id,
+                None         => continue,
+            };
+
+            job_ids.get_mut(&status).unwrap().push(job_id);
+        }
+
+        Ok(job_ids)
     }
 
     /// Get number of jobs currently queued.

@@ -9,6 +9,7 @@ use log::{debug, warn};
 
 use crate::application::RedisManager;
 use crate::models::{job, queue, OcyResult, ServerInfo};
+use std::collections::HashMap;
 
 /// Main actor that exposes job queue functionality.
 ///
@@ -166,6 +167,22 @@ impl Handler<GetQueueSize> for ApplicationActor {
 
     fn handle(&mut self, msg: GetQueueSize, _ctx: &mut Self::Context) -> Self::Result {
         RedisManager::new(self.get_connection()?).queue_size(&msg.0)
+    }
+}
+
+
+/// Message used to get job IDs by state for a queue.
+pub struct GetQueueJobIds(pub String);
+
+impl Message for GetQueueJobIds {
+    type Result = OcyResult<HashMap<job::Status, Vec<u64>>>;
+}
+
+impl Handler<GetQueueJobIds> for ApplicationActor {
+    type Result = OcyResult<HashMap<job::Status, Vec<u64>>>;
+
+    fn handle(&mut self, msg: GetQueueJobIds, _ctx: &mut Self::Context) -> Self::Result {
+        RedisManager::new(self.get_connection()?).queue_job_ids(&msg.0)
     }
 }
 

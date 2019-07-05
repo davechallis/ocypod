@@ -36,6 +36,16 @@ pub enum Status {
     TimedOut,
 }
 
+pub const ALL_STATUSES: [Status; 6] = [
+    Status::Queued,
+    Status::Running,
+    Status::Failed,
+    Status::Completed,
+    Status::Cancelled,
+    Status::TimedOut,
+];
+
+
 impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.as_ref())
@@ -94,15 +104,6 @@ impl<'a> ToRedisArgs for &'a Status {
 mod test {
     use serde_json;
     use super::*;
-
-    const ALL_STATUSES: [Status; 6] = [
-        Status::Queued,
-        Status::Running,
-        Status::Failed,
-        Status::Completed,
-        Status::Cancelled,
-        Status::TimedOut,
-    ];
 
     /// Ensure all fields correctly map to/from the same strings.
     #[test]
