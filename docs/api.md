@@ -223,6 +223,31 @@ minutes after the 3rd failure, and for 5 minutes on the 4th failure.
 400 - invalid queue name or invalid job creation JSON given
 404 - queue with given name not found
 
+---
+
+### `GET /queue/{queue_name}/job_ids`
+
+Get a list of job IDs by status for all jobs originally created in the
+given queue.
+
+
+
+#### Returns
+
+JSON response of the form:
+
+    {<status>: [<job ID>, ...], ...}
+
+* 200 - JSON response as described above
+* 400 - invalid queue name given
+* 404 - queue with given name not found
+
+#### Example
+
+    $ curl -i localhost:8023/queue/example/job_ids
+    {"completed":[1,2],"cancelled":[],"timed_out":[],"queued":[4,5],"running":[3],"failed":[]}
+
+
 ## Job endpoints
 
 Endpoints for interacting with jobs in any state.
