@@ -99,7 +99,7 @@ fn main() -> std::io::Result<()> {
 
                     .service(
                         web::resource("/{id}/output")
-                            .route(web::get().to_async(handlers::job::set_output))
+                            .route(web::get().to_async(handlers::job::output))
                             .route(web::put().to_async(handlers::job::set_output))
                     )
 
