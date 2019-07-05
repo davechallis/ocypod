@@ -22,7 +22,8 @@ services:
 addons:
   homebrew:
     packages: redis
-  
+    update: true
+
 script:
   - cargo build --verbose --all
   - cargo test --verbose --all -- --test-threads=1
