@@ -1,8 +1,9 @@
-# Unreleased
+# 0.4.0 (2019-07-05)
 
 * Added `/queue/{name}/job_ids` endpoint to return job IDs by status for a
   given queue.
 * Fix to `/queue/{name}/size` endpoint returning 404.
+* Fix to incorrect endpoint handler mapping for `/job/{id}/output` endpoint.
 
 # 0.3.0 (2019-06-28)
 
