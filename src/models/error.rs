@@ -51,7 +51,7 @@ impl fmt::Display for OcyError {
 }
 
 impl Error for OcyError {
-    fn cause(&self) -> Option<&Error> {
+    fn cause(&self) -> Option<&dyn Error> {
         match self {
             OcyError::Redis(err)         => err.source(),
             OcyError::RedisConnection(_) => None,

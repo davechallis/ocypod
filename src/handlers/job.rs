@@ -31,7 +31,7 @@ pub fn index(
     path: Path<u64>,
     query: Query<JobFields>,
     data: Data<ApplicationState>,
-) -> Box<Future<Item=HttpResponse, Error=()>> {
+) -> Box<dyn Future<Item=HttpResponse, Error=()>> {
     let job_id = path.into_inner();
     let fields = match query.into_inner().fields {
         Some(raw_fields) => {

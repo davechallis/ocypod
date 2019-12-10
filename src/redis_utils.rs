@@ -13,7 +13,7 @@ use crate::models::OcyResult;
 /// let (a, b, c): Vec<(x_type, y_type, z_type)> = vec_from_redis_pipe(pipe, conn)?;
 pub fn vec_from_redis_pipe<T: FromRedisValue>(
     pipe: &Pipeline,
-    conn: &ConnectionLike
+    conn: &dyn ConnectionLike
 ) -> RedisResult<Vec<T>> {
     let values: Vec<Value> = pipe.query(conn)?;
     let mut results = Vec::with_capacity(values.len());
@@ -36,7 +36,7 @@ pub fn transaction<
     T,
     F: FnMut(&mut Pipeline) -> OcyResult<Option<T>>
 >(
-    conn: &ConnectionLike,
+    conn: &dyn ConnectionLike,
     keys: &[K],
     func: F,
 ) -> OcyResult<T> {
