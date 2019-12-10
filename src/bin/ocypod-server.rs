@@ -17,7 +17,7 @@ fn main() -> std::io::Result<()> {
         let log_settings = format!("ocypod={},ocypod-server={}", config.server.log_level, config.server.log_level);
         env_logger::Builder::new()
             .parse_filters(&log_settings)
-            .default_format_module_path(false)
+            .format_module_path(false)
             .init();
         debug!("Log initialised using: {}", &log_settings);
     }
