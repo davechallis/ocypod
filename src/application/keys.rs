@@ -53,4 +53,3 @@ pub static STATS_KEYS: [&str; 6] = [
     STAT_JOBS_TIMED_OUT_KEY,
     STAT_JOBS_CANCELLED_KEY,
 ];
-

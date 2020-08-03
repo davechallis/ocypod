@@ -1,6 +1,6 @@
 [package]
 name = "ocypod"
-version = "0.4.0"
+version = "0.1.0"
 authors = ["Dave Challis <dave@suicas.net>"]
 description = "Ocypod is a Redis-backed service for orchestrating background jobs."
 repository = "https://github.com/davechallis/ocypod"
@@ -13,25 +13,22 @@ travis-ci = { repository = "davechallis/ocypod" }
 appveyor = { repository = "davechallis/ocypod" }
 
 [dependencies]
-actix-web = "1.0"
-actix = "0.8"
-actix-rt = "0.2"
-clap = "2.33"
-env_logger = "0.7"
-chrono = { version = "0.4", features = ["serde"] }
-log = "0.4"
-num_cpus = "1.11"
-redis = "0.10"
-serde = "1.0"
-serde_derive = "1.0"
-serde-humantime = "0.1"
+structopt = "0.3"
+tokio = { version = "0.2", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio-timer = "0.2"
 toml = "0.5"
-futures = "0.1"
 human-size = "0.4"
-humantime = "1.2"
+chrono = { version = "0.4", features = ["serde"] }
+redis = { version = "0.17", features = ["connection-manager"] }
+log = "0.4"
+humantime = "2.0"
+pretty_env_logger = "0.4"
+actix-web = "2.0"
+actix-rt = "1.0"
 
 [dev-dependencies]
 net2 = "0.2"
 rand = "0.4"
+tempdir = "0.3"
+futures = "0.3"

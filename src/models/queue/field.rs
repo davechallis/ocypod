@@ -1,6 +1,6 @@
+use redis::{self, FromRedisValue, RedisWrite, ToRedisArgs};
 use std::fmt;
 use std::str::FromStr;
-use redis::{self, FromRedisValue, ToRedisArgs};
 
 const TIMEOUT_FIELD: &str = "timeout";
 const HEARTBEAT_TIMEOUT_FIELD: &str = "heartbeat_timeout";
@@ -26,11 +26,11 @@ impl fmt::Display for Field {
 impl AsRef<str> for Field {
     fn as_ref(&self) -> &str {
         match self {
-            Field::Timeout          => TIMEOUT_FIELD,
+            Field::Timeout => TIMEOUT_FIELD,
             Field::HeartbeatTimeout => HEARTBEAT_TIMEOUT_FIELD,
-            Field::ExpiresAfter     => EXPIRES_AFTER_FIELD,
-            Field::Retries          => RETRIES_FIELD,
-            Field::RetryDelays      => RETRY_DELAYS_FIELD,
+            Field::ExpiresAfter => EXPIRES_AFTER_FIELD,
+            Field::Retries => RETRIES_FIELD,
+            Field::RetryDelays => RETRY_DELAYS_FIELD,
         }
     }
 }
@@ -40,18 +40,18 @@ impl FromStr for Field {
 
     fn from_str(s: &str) -> Result<Field, ()> {
         match s {
-            TIMEOUT_FIELD           => Ok(Field::Timeout),
+            TIMEOUT_FIELD => Ok(Field::Timeout),
             HEARTBEAT_TIMEOUT_FIELD => Ok(Field::HeartbeatTimeout),
-            EXPIRES_AFTER_FIELD     => Ok(Field::ExpiresAfter),
-            RETRIES_FIELD           => Ok(Field::Retries),
-            RETRY_DELAYS_FIELD      => Ok(Field::RetryDelays),
+            EXPIRES_AFTER_FIELD => Ok(Field::ExpiresAfter),
+            RETRIES_FIELD => Ok(Field::Retries),
+            RETRY_DELAYS_FIELD => Ok(Field::RetryDelays),
             _ => Err(()),
         }
     }
 }
 
 impl ToRedisArgs for Field {
-    fn write_redis_args(&self, out: &mut Vec<Vec<u8>>) {
+    fn write_redis_args<W: ?Sized + RedisWrite>(&self, out: &mut W) {
         self.as_ref().write_redis_args(out)
     }
 }

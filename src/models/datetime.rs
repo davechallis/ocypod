@@ -2,9 +2,8 @@
 
 use std::fmt;
 
-use chrono;
-use redis::{self, FromRedisValue, ToRedisArgs, RedisResult};
-use serde_derive::*;
+use redis::{self, FromRedisValue, RedisResult, RedisWrite, ToRedisArgs};
+use serde::Serialize;
 
 /// Thin wrapper around a `chrono::DateTime<Utc>` with functions for custom (de)serialisation.
 #[derive(Clone, Debug, PartialEq, PartialOrd, Serialize)]
@@ -26,13 +25,17 @@ impl FromRedisValue for DateTime {
     ///  Parse an RFC3339 date string from Redis.
     fn from_redis_value(v: &redis::Value) -> RedisResult<Self> {
         let dt: String = redis::from_redis_value(v)?;
-        Ok(DateTime(chrono::DateTime::parse_from_rfc3339(&dt).unwrap().with_timezone(&chrono::Utc)))
+        Ok(DateTime(
+            chrono::DateTime::parse_from_rfc3339(&dt)
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        ))
     }
 }
 
 impl ToRedisArgs for DateTime {
     /// Format this struct as an RFC3339 date string for storage in Redis.
-    fn write_redis_args(&self, out: &mut Vec<Vec<u8>>) {
+    fn write_redis_args<W: ?Sized + RedisWrite>(&self, out: &mut W) {
         self.0.to_rfc3339().write_redis_args(out)
     }
 }

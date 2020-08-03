@@ -1,12 +1,13 @@
 //! Main application logic, generally exposed via `RedisManager`.
 
 mod job;
+mod keys;
 mod manager;
+pub mod monitor;
 mod queue;
 mod tag;
-mod keys;
 
-pub use self::manager::RedisManager;
-pub use self::job::RedisJob;
-use self::queue::RedisQueue;
-use self::tag::RedisTag;
+pub use job::RedisJob;
+pub use manager::RedisManager;
+use queue::RedisQueue;
+use tag::RedisTag;

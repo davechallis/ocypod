@@ -1,7 +1,6 @@
 //! Miscellaneous Redis utilities and helper functions.
 
-use redis::{cmd, ToRedisArgs, FromRedisValue, RedisResult, Value, Pipeline, ConnectionLike, from_redis_value};
-use crate::models::OcyResult;
+use redis::{aio::ConnectionLike, from_redis_value, FromRedisValue, Pipeline, RedisResult, Value};
 
 /// Helper function for getting nested data structures from Redis pipelines.
 ///
@@ -11,11 +10,11 @@ use crate::models::OcyResult;
 ///     .hget(key3, [x, y, z])
 ///
 /// let (a, b, c): Vec<(x_type, y_type, z_type)> = vec_from_redis_pipe(pipe, conn)?;
-pub fn vec_from_redis_pipe<T: FromRedisValue>(
+pub async fn vec_from_redis_pipe<C: ConnectionLike, T: FromRedisValue>(
+    conn: &mut C,
     pipe: &Pipeline,
-    conn: &dyn ConnectionLike
 ) -> RedisResult<Vec<T>> {
-    let values: Vec<Value> = pipe.query(conn)?;
+    let values: Vec<Value> = pipe.query_async(conn).await?;
     let mut results = Vec::with_capacity(values.len());
     for v in values {
         results.push(from_redis_value::<T>(&v)?);
@@ -24,30 +23,16 @@ pub fn vec_from_redis_pipe<T: FromRedisValue>(
     Ok(results)
 }
 
-/// Helper function to perform transactions in Redis. Based on the `redis::transaction` implementation,
-/// but doesn't restrict the return type with `FromRedisValue`.
-///
-/// Takes a function that returns an `Option<T>`. A return value of `Some(T)` means that the transaction
-/// succeeded, and that the loop should be terminated. A value of `None` means that a watched key was
-/// modified during the transaction, and that the transaction should be retried.
-use std::fmt::Debug;
-pub fn transaction<
-    K: ToRedisArgs + Debug,
-    T,
-    F: FnMut(&mut Pipeline) -> OcyResult<Option<T>>
->(
-    conn: &dyn ConnectionLike,
-    keys: &[K],
-    func: F,
-) -> OcyResult<T> {
-    let mut func = func;
-    loop {
-        cmd("WATCH").arg(keys).query(conn)?;
-        let mut p = redis::pipe();
-        if let Some(result) = func(p.atomic())? {
-            // ensure no watch is left in connection, regardless of whether pipeline was used
-            cmd("UNWATCH").query(conn)?;
-            return Ok(result);
+#[macro_export]
+macro_rules! transaction_async {
+    ($conn:expr, $keys:expr, $body:expr) => {
+        loop {
+            redis::cmd("WATCH").arg($keys).query_async($conn).await?;
+
+            if let Some(response) = $body {
+                redis::cmd("UNWATCH").query_async($conn).await?;
+                break response;
+            }
         }
-    }
+    };
 }

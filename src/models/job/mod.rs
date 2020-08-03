@@ -6,13 +6,12 @@ mod status;
 pub use self::field::Field;
 pub use self::payload::Payload;
 pub use self::request::{CreateRequest, UpdateRequest};
-pub use self::status::{ALL_STATUSES, Status};
+pub use self::status::{Status, ALL_STATUSES};
 
-use serde_json;
-use serde::ser::{Serialize, Serializer, SerializeMap};
-use redis::{self, Commands, FromRedisValue};
+use crate::models::{DateTime, Duration, OcyResult};
+use redis::{self, aio::ConnectionLike, AsyncCommands, FromRedisValue, ToRedisArgs};
+use serde::ser::{Serialize, SerializeMap, Serializer};
 use std::collections::{HashMap, HashSet};
-use crate::models::{OcyResult, DateTime, Duration};
 
 /// Generic data structure for containing a subset of job metadata.
 ///
@@ -27,25 +26,29 @@ pub struct JobMeta {
 impl Serialize for JobMeta {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut map = serializer.serialize_map(Some(self.fields.len()))?;
-        for field in self.fields.iter().filter(|f| !self.hidden_fields.contains(f)) {
+        for field in self
+            .fields
+            .iter()
+            .filter(|f| !self.hidden_fields.contains(f))
+        {
             match field {
-                Field::Id               => map.serialize_entry(field, &self.id())?,
-                Field::Queue            => map.serialize_entry(field, &self.queue())?,
-                Field::Status           => map.serialize_entry(field, &self.status())?,
-                Field::Tags             => map.serialize_entry(field, &self.tags())?,
-                Field::CreatedAt        => map.serialize_entry(field, &self.created_at())?,
-                Field::StartedAt        => map.serialize_entry(field, &self.started_at())?,
-                Field::EndedAt          => map.serialize_entry(field, &self.ended_at())?,
-                Field::LastHeartbeat    => map.serialize_entry(field, &self.last_heartbeat())?,
-                Field::Input            => map.serialize_entry(field, &self.input())?,
-                Field::Output           => map.serialize_entry(field, &self.output())?,
-                Field::Timeout          => map.serialize_entry(field, &self.timeout())?,
+                Field::Id => map.serialize_entry(field, &self.id())?,
+                Field::Queue => map.serialize_entry(field, &self.queue())?,
+                Field::Status => map.serialize_entry(field, &self.status())?,
+                Field::Tags => map.serialize_entry(field, &self.tags())?,
+                Field::CreatedAt => map.serialize_entry(field, &self.created_at())?,
+                Field::StartedAt => map.serialize_entry(field, &self.started_at())?,
+                Field::EndedAt => map.serialize_entry(field, &self.ended_at())?,
+                Field::LastHeartbeat => map.serialize_entry(field, &self.last_heartbeat())?,
+                Field::Input => map.serialize_entry(field, &self.input())?,
+                Field::Output => map.serialize_entry(field, &self.output())?,
+                Field::Timeout => map.serialize_entry(field, &self.timeout())?,
                 Field::HeartbeatTimeout => map.serialize_entry(field, &self.heartbeat_timeout())?,
-                Field::ExpiresAfter     => map.serialize_entry(field, &self.expires_after())?,
-                Field::Retries          => map.serialize_entry(field, &self.retries())?,
+                Field::ExpiresAfter => map.serialize_entry(field, &self.expires_after())?,
+                Field::Retries => map.serialize_entry(field, &self.retries())?,
                 Field::RetriesAttempted => map.serialize_entry(field, &self.retries_attempted())?,
-                Field::RetryDelays      => map.serialize_entry(field, &self.retry_delays())?,
-                Field::Ended            => map.serialize_entry(field, &self.ended())?,
+                Field::RetryDelays => map.serialize_entry(field, &self.retry_delays())?,
+                Field::Ended => map.serialize_entry(field, &self.ended())?,
             }
         }
 
@@ -58,7 +61,7 @@ impl JobMeta {
     pub fn from_redis_value(
         fields: &[Field],
         v: &redis::Value,
-        hidden_fields: &[Field]
+        hidden_fields: &[Field],
     ) -> redis::RedisResult<Self> {
         let hidden_fields: HashSet<Field> = if hidden_fields.is_empty() {
             HashSet::new()
@@ -72,18 +75,32 @@ impl JobMeta {
                 for (field, item) in fields.iter().zip(items) {
                     match item {
                         redis::Value::Nil => (),
-                        data              => { map.insert(field.clone(), data.to_owned()); },
+                        data => {
+                            map.insert(field.clone(), data.to_owned());
+                        }
                     }
                 }
 
-                Ok(Self { map, fields: fields.to_vec(), hidden_fields })
-            },
+                Ok(Self {
+                    map,
+                    fields: fields.to_vec(),
+                    hidden_fields,
+                })
+            }
             item @ redis::Value::Data(_) => {
                 let mut map = HashMap::with_capacity(1);
                 map.insert(fields[0].clone(), item.to_owned());
-                Ok(Self { map, fields: fields.to_vec(), hidden_fields })
-            },
-            redis::Value::Nil => Ok(Self { map: HashMap::new(), fields: fields.to_vec(), hidden_fields }),
+                Ok(Self {
+                    map,
+                    fields: fields.to_vec(),
+                    hidden_fields,
+                })
+            }
+            redis::Value::Nil => Ok(Self {
+                map: HashMap::new(),
+                fields: fields.to_vec(),
+                hidden_fields,
+            }),
             _ => panic!("Unhandled response type for JobMeta query: {:?}", v),
         }
     }
@@ -100,12 +117,20 @@ impl JobMeta {
 
     /// Get a mandatory field value from this struct's map. Caller must ensure that field is present.
     fn get_mandatory_field<T: redis::FromRedisValue>(&self, field: &Field) -> T {
-        redis::from_redis_value(&self.map.get(field).unwrap_or_else(|| panic!("failed to get: {}", field))).unwrap()
+        redis::from_redis_value(
+            &self
+                .map
+                .get(field)
+                .unwrap_or_else(|| panic!("failed to get: {}", field)),
+        )
+        .unwrap()
     }
 
     /// Get an optional field value from this struct's map.
     fn get_optional_field<T: redis::FromRedisValue>(&self, field: &Field) -> Option<T> {
-        self.map.get(field).map(|v| redis::from_redis_value(v).unwrap())
+        self.map
+            .get(field)
+            .map(|v| redis::from_redis_value(v).unwrap())
     }
 
     pub fn id(&self) -> u64 {
@@ -121,7 +146,8 @@ impl JobMeta {
     }
 
     pub fn tags(&self) -> Option<Vec<String>> {
-        self.get_optional_field::<String>(&Field::Tags).map(|s| serde_json::from_str(&s).unwrap())
+        self.get_optional_field::<String>(&Field::Tags)
+            .map(|s| serde_json::from_str(&s).unwrap())
     }
 
     pub fn created_at(&self) -> DateTime {
@@ -141,11 +167,13 @@ impl JobMeta {
     }
 
     pub fn input(&self) -> Option<serde_json::Value> {
-        self.get_optional_field::<String>(&Field::Input).map(|s| serde_json::from_str(&s).unwrap())
+        self.get_optional_field::<String>(&Field::Input)
+            .map(|s| serde_json::from_str(&s).unwrap())
     }
 
     pub fn output(&self) -> Option<serde_json::Value> {
-        self.get_optional_field::<String>(&Field::Output).map(|s| serde_json::from_str(&s).unwrap())
+        self.get_optional_field::<String>(&Field::Output)
+            .map(|s| serde_json::from_str(&s).unwrap())
     }
 
     pub fn timeout(&self) -> Duration {
@@ -169,13 +197,14 @@ impl JobMeta {
     }
 
     pub fn retry_delays(&self) -> Option<Vec<Duration>> {
-        self.get_optional_field::<String>(&Field::RetryDelays).map(|s| serde_json::from_str(&s).unwrap())
+        self.get_optional_field::<String>(&Field::RetryDelays)
+            .map(|s| serde_json::from_str(&s).unwrap())
     }
 
     pub fn ended(&self) -> bool {
         match self.status() {
-            Status::Running | Status::Queued      => false,
-            Status::TimedOut | Status::Failed     => self.retries() == 0,
+            Status::Running | Status::Queued => false,
+            Status::TimedOut | Status::Failed => self.retries() == 0,
             Status::Completed | Status::Cancelled => true,
         }
     }
@@ -186,14 +215,23 @@ pub struct TimeoutMeta(JobMeta);
 
 impl FromRedisValue for TimeoutMeta {
     fn from_redis_value(v: &redis::Value) -> redis::RedisResult<Self> {
-        Ok(TimeoutMeta(JobMeta::from_redis_value(TimeoutMeta::fields(), v, &[])?))
+        Ok(TimeoutMeta(JobMeta::from_redis_value(
+            TimeoutMeta::fields(),
+            v,
+            &[],
+        )?))
     }
 }
 
 impl TimeoutMeta {
-    pub fn from_conn<K: redis::ToRedisArgs>(conn: &redis::Connection, key: K) -> redis::RedisResult<Self> {
+    pub async fn from_conn<C, K>(conn: &mut C, key: K) -> redis::RedisResult<Self>
+    where
+        C: ConnectionLike + Send,
+        K: ToRedisArgs + Send + Sync,
+    {
         let fields = TimeoutMeta::fields();
-        Ok(TimeoutMeta(JobMeta::from_redis_value(fields, &conn.hget(key, fields)?, &[])?))
+        let v: redis::Value = conn.hget(key, fields).await?;
+        Ok(TimeoutMeta(JobMeta::from_redis_value(fields, &v, &[])?))
     }
 
     pub fn id(&self) -> u64 {
@@ -243,25 +281,35 @@ impl TimeoutMeta {
             Field::Timeout,
             Field::HeartbeatTimeout,
             Field::LastHeartbeat,
-            Field::StartedAt
+            Field::StartedAt,
         ];
         &FIELDS
     }
 }
 
-
 pub struct ExpiryMeta(JobMeta);
 
 impl FromRedisValue for ExpiryMeta {
     fn from_redis_value(v: &redis::Value) -> redis::RedisResult<Self> {
-        Ok(ExpiryMeta(JobMeta::from_redis_value(ExpiryMeta::fields(), v, &[])?))
+        Ok(ExpiryMeta(JobMeta::from_redis_value(
+            ExpiryMeta::fields(),
+            v,
+            &[],
+        )?))
     }
 }
 
 impl ExpiryMeta {
-    pub fn from_conn<K: redis::ToRedisArgs>(conn: &redis::Connection, key: K) -> OcyResult<Self> {
+    pub async fn from_conn<C: ConnectionLike + Send, K: redis::ToRedisArgs + Send + Sync>(
+        conn: &mut C,
+        key: K,
+    ) -> OcyResult<Self> {
         let fields = ExpiryMeta::fields();
-        Ok(ExpiryMeta(JobMeta::from_redis_value(fields, &conn.hget(key, fields)?, &[])?))
+        Ok(ExpiryMeta(JobMeta::from_redis_value(
+            fields,
+            &conn.hget(key, fields).await?,
+            &[],
+        )?))
     }
 
     pub fn id(&self) -> u64 {
@@ -269,11 +317,7 @@ impl ExpiryMeta {
     }
 
     pub fn fields() -> &'static [Field] {
-        static FIELDS: [Field; 3] = [
-            Field::Id,
-            Field::EndedAt,
-            Field::ExpiresAfter,
-        ];
+        static FIELDS: [Field; 3] = [Field::Id, Field::EndedAt, Field::ExpiresAfter];
         &FIELDS
     }
 
@@ -301,7 +345,6 @@ impl ExpiryMeta {
     }
 }
 
-
 pub enum RetryAction {
     /// Move job back to its original queue to be retried later.
     Retry,
@@ -313,19 +356,29 @@ pub enum RetryAction {
     None,
 }
 
-
 pub struct RetryMeta(JobMeta);
 
 impl FromRedisValue for RetryMeta {
     fn from_redis_value(v: &redis::Value) -> redis::RedisResult<Self> {
-        Ok(RetryMeta(JobMeta::from_redis_value(RetryMeta::fields(), v, &[])?))
+        Ok(RetryMeta(JobMeta::from_redis_value(
+            RetryMeta::fields(),
+            v,
+            &[],
+        )?))
     }
 }
 
 impl RetryMeta {
-    pub fn from_conn<K: redis::ToRedisArgs>(conn: &redis::Connection, key: K) -> OcyResult<Self> {
+    pub async fn from_conn<C: ConnectionLike + Send, K: redis::ToRedisArgs + Send + Sync>(
+        conn: &mut C,
+        key: K,
+    ) -> OcyResult<Self> {
         let fields = RetryMeta::fields();
-        Ok(RetryMeta(JobMeta::from_redis_value(fields, &conn.hget(key, fields)?, &[])?))
+        Ok(RetryMeta(JobMeta::from_redis_value(
+            fields,
+            &conn.hget(key, fields).await?,
+            &[],
+        )?))
     }
 
     pub fn id(&self) -> u64 {
@@ -371,7 +424,8 @@ impl RetryMeta {
                     retry_delays[retry_attempt - 1].as_secs()
                 };
 
-                if (DateTime::now().seconds_since(&self.0.ended_at().unwrap()) as u64) < delay_secs {
+                if (DateTime::now().seconds_since(&self.0.ended_at().unwrap()) as u64) < delay_secs
+                {
                     return RetryAction::End;
                 }
             }

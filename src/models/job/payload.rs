@@ -1,5 +1,4 @@
-use serde_json;
-use serde_derive::*;
+use serde::Serialize;
 
 /// Job definition delivered to clients when they take a job from a queue.
 #[derive(Debug, Serialize)]
