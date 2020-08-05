@@ -3,7 +3,6 @@
 //! Requires Redis to be installed, so that the tests can start/stop Redis servers as necessary
 //! using the `redis-server` binary.
 
-use std::thread::sleep;
 use std::time;
 use std::collections::HashMap;
 use redis::aio::Connection;
@@ -295,203 +294,203 @@ async fn job_output() {
     // TODO: populate test
 }
 
-// #[tokio::test]
-// fn job_deletion() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+#[tokio::test]
+async fn job_deletion() {
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-//     let tags = vec!["tag".to_string()];
-//     let job_req = job::CreateRequest { tags: Some(tags), ..Default::default() };
+    let tags = vec!["tag".to_string()];
+    let job_req = job::CreateRequest { tags: Some(tags), ..Default::default() };
 
-//     let jobs = create_job_in_all_states(&qw.manager, DEFAULT_QUEUE, &job_req);
-//     let job_id_running = jobs[&job::Status::Running];
-//     let job_id_completed = jobs[&job::Status::Completed];
-//     let job_id_failed = jobs[&job::Status::Failed];
-//     let job_id_cancelled = jobs[&job::Status::Cancelled];
-//     let job_id_timed_out = jobs[&job::Status::TimedOut];
-//     let job_id_queued = jobs[&job::Status::Queued];
+    let jobs = create_job_in_all_states(&mut conn, DEFAULT_QUEUE, &job_req).await;
+    let job_id_running = jobs[&job::Status::Running];
+    let job_id_completed = jobs[&job::Status::Completed];
+    let job_id_failed = jobs[&job::Status::Failed];
+    let job_id_cancelled = jobs[&job::Status::Cancelled];
+    let job_id_timed_out = jobs[&job::Status::TimedOut];
+    let job_id_queued = jobs[&job::Status::Queued];
 
-//     assert_eq!(RedisManager::running_queue_size().unwrap(), 1);
-//     assert!(RedisManager::tagged_job_ids("tag").unwrap().contains(&job_id_running));
-//     assert!(RedisManager::delete_job(job_id_running).unwrap());
-//     assert_eq!(RedisManager::running_queue_size().unwrap(), 0);
-//     assert!(!RedisManager::tagged_job_ids("tag").unwrap().contains(&job_id_running));
+    assert_eq!(RedisManager::running_queue_size(&mut conn).await.unwrap(), 1);
+    assert!(RedisManager::tagged_job_ids(&mut conn, "tag").await.unwrap().contains(&job_id_running));
+    assert!(RedisManager::delete_job(&mut conn, job_id_running).await.unwrap());
+    assert_eq!(RedisManager::running_queue_size(&mut conn, ).await.unwrap(), 0);
+    assert!(!RedisManager::tagged_job_ids(&mut conn, "tag").await.unwrap().contains(&job_id_running));
 
-//     assert!(RedisManager::tagged_job_ids("tag").unwrap().contains(&job_id_completed));
-//     assert!(RedisManager::delete_job(job_id_completed).unwrap());
-//     assert!(!RedisManager::tagged_job_ids("tag").unwrap().contains(&job_id_completed));
+    assert!(RedisManager::tagged_job_ids(&mut conn, "tag").await.unwrap().contains(&job_id_completed));
+    assert!(RedisManager::delete_job(&mut conn, job_id_completed).await.unwrap());
+    assert!(!RedisManager::tagged_job_ids(&mut conn, "tag").await.unwrap().contains(&job_id_completed));
 
-//     assert_eq!(RedisManager::failed_queue_size().unwrap(), 2);
-//     assert!(RedisManager::tagged_job_ids("tag").unwrap().contains(&job_id_failed));
-//     assert!(RedisManager::delete_job(job_id_failed).unwrap());
-//     assert_eq!(RedisManager::failed_queue_size().unwrap(), 1);
-//     assert!(!RedisManager::tagged_job_ids("tag").unwrap().contains(&job_id_failed));
+    assert_eq!(RedisManager::failed_queue_size(&mut conn, ).await.unwrap(), 2);
+    assert!(RedisManager::tagged_job_ids(&mut conn, "tag").await.unwrap().contains(&job_id_failed));
+    assert!(RedisManager::delete_job(&mut conn, job_id_failed).await.unwrap());
+    assert_eq!(RedisManager::failed_queue_size(&mut conn).await.unwrap(), 1);
+    assert!(!RedisManager::tagged_job_ids(&mut conn, "tag").await.unwrap().contains(&job_id_failed));
 
-//     assert!(RedisManager::tagged_job_ids("tag").unwrap().contains(&job_id_cancelled));
-//     assert!(RedisManager::delete_job(job_id_cancelled).unwrap());
-//     assert!(!RedisManager::tagged_job_ids("tag").unwrap().contains(&job_id_cancelled));
+    assert!(RedisManager::tagged_job_ids(&mut conn, "tag").await.unwrap().contains(&job_id_cancelled));
+    assert!(RedisManager::delete_job(&mut conn, job_id_cancelled).await.unwrap());
+    assert!(!RedisManager::tagged_job_ids(&mut conn, "tag").await.unwrap().contains(&job_id_cancelled));
 
-//     assert_eq!(RedisManager::failed_queue_size().unwrap(), 1);
-//     assert!(RedisManager::tagged_job_ids("tag").unwrap().contains(&job_id_timed_out));
-//     assert!(RedisManager::delete_job(job_id_timed_out).unwrap());
-//     assert_eq!(RedisManager::failed_queue_size().unwrap(), 0);
-//     assert!(!RedisManager::tagged_job_ids("tag").unwrap().contains(&job_id_timed_out));
+    assert_eq!(RedisManager::failed_queue_size(&mut conn).await.unwrap(), 1);
+    assert!(RedisManager::tagged_job_ids(&mut conn, "tag").await.unwrap().contains(&job_id_timed_out));
+    assert!(RedisManager::delete_job(&mut conn, job_id_timed_out).await.unwrap());
+    assert_eq!(RedisManager::failed_queue_size(&mut conn).await.unwrap(), 0);
+    assert!(!RedisManager::tagged_job_ids(&mut conn, "tag").await.unwrap().contains(&job_id_timed_out));
 
-//     assert_eq!(RedisManager::queue_size(DEFAULT_QUEUE).unwrap(), 1);
-//     assert!(RedisManager::tagged_job_ids("tag").unwrap().contains(&job_id_queued));
-//     assert!(RedisManager::delete_job(job_id_queued).unwrap());
-//     assert_eq!(RedisManager::queue_size(DEFAULT_QUEUE).unwrap(), 0);
-//     assert!(!RedisManager::tagged_job_ids("tag").unwrap().contains(&job_id_queued));
+    assert_eq!(RedisManager::queue_size(&mut conn, DEFAULT_QUEUE).await.unwrap(), 1);
+    assert!(RedisManager::tagged_job_ids(&mut conn, "tag").await.unwrap().contains(&job_id_queued));
+    assert!(RedisManager::delete_job(&mut conn, job_id_queued).await.unwrap());
+    assert_eq!(RedisManager::queue_size(&mut conn, DEFAULT_QUEUE).await.unwrap(), 0);
+    assert!(!RedisManager::tagged_job_ids(&mut conn, "tag").await.unwrap().contains(&job_id_queued));
 
-//     // ensure deleting non-existing jobs returns false
-//     assert!(!RedisManager::delete_job(job_id_running).unwrap());
-//     assert!(!RedisManager::delete_job(job_id_completed).unwrap());
-//     assert!(!RedisManager::delete_job(job_id_failed).unwrap());
-//     assert!(!RedisManager::delete_job(job_id_cancelled).unwrap());
-//     assert!(!RedisManager::delete_job(job_id_timed_out).unwrap());
-//     assert!(!RedisManager::delete_job(job_id_queued).unwrap());
-// }
+    // ensure deleting non-existing jobs returns false
+    assert!(!RedisManager::delete_job(&mut conn, job_id_running).await.unwrap());
+    assert!(!RedisManager::delete_job(&mut conn, job_id_completed).await.unwrap());
+    assert!(!RedisManager::delete_job(&mut conn, job_id_failed).await.unwrap());
+    assert!(!RedisManager::delete_job(&mut conn, job_id_cancelled).await.unwrap());
+    assert!(!RedisManager::delete_job(&mut conn, job_id_timed_out).await.unwrap());
+    assert!(!RedisManager::delete_job(&mut conn, job_id_queued).await.unwrap());
+}
 
-// #[tokio::test]
-// fn job_retry_no_queue() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+#[tokio::test]
+async fn job_retry_no_queue() {
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-//     let job_req = job::CreateRequest {
-//         timeout: Some(Duration::from_secs(1)),
-//         heartbeat_timeout: Some(Duration::from_secs(0)),
-//         expires_after: Some(Duration::from_secs(0)),
-//         retries: Some(3),
-//         retry_delays: None,
-//         ..Default::default() };
+    let job_req = job::CreateRequest {
+        timeout: Some(Duration::from_secs(1)),
+        heartbeat_timeout: Some(Duration::from_secs(0)),
+        expires_after: Some(Duration::from_secs(0)),
+        retries: Some(3),
+        retry_delays: None,
+        ..Default::default() };
 
-//     // create and start new job running
-//     let job_id = qw.new_running_job(&job_req).id();
-//     let job_info = qw.job_meta(job_id);
-//     assert_eq!(job_info.retries(), 3);
-//     assert_eq!(job_info.retries_attempted(), 0);
-//     assert_eq!(job_info.retry_delays(), None);
+    // create and start new job running
+    let job_id = qw.new_running_job(&mut conn, &job_req).await.id();
+    let job_info = qw.job_meta(&mut conn, job_id).await;
+    assert_eq!(job_info.retries(), 3);
+    assert_eq!(job_info.retries_attempted(), 0);
+    assert_eq!(job_info.retry_delays(), None);
 
-//     // 1st failure
-//     let job_info = qw.fail_job(job_id);
-//     assert_eq!(job_info.retries(), 3);
-//     assert_eq!(job_info.retries_attempted(), 0);
-//     assert_eq!(job_info.retry_delays(), None);
+    // 1st failure
+    let job_info = qw.fail_job(&mut conn, job_id).await;
+    assert_eq!(job_info.retries(), 3);
+    assert_eq!(job_info.retries_attempted(), 0);
+    assert_eq!(job_info.retry_delays(), None);
 
-//     // delete job's original queue
-//     assert!(RedisManager::delete_queue(DEFAULT_QUEUE).unwrap());
+    // delete job's original queue
+    assert!(RedisManager::delete_queue(&mut conn, DEFAULT_QUEUE).await.unwrap());
 
-//     // 1st retry
-//     assert_eq!(RedisManager::check_job_retries().unwrap(), Vec::<u64>::new());
-//     let job_info = qw.job_meta(job_id);
-//     assert_eq!(job_info.status(), job::Status::Failed);
-//     assert_eq!(job_info.retries_attempted(), 0);
-// }
+    // 1st retry
+    assert_eq!(RedisManager::check_job_retries(&mut conn).await.unwrap(), Vec::<u64>::new());
+    let job_info = qw.job_meta(&mut conn, job_id).await;
+    assert_eq!(job_info.status(), job::Status::Failed);
+    assert_eq!(job_info.retries_attempted(), 0);
+}
 
-// #[tokio::test]
-// fn job_retries() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+#[tokio::test]
+async fn job_retries() {
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-//     let job_req = job::CreateRequest {
-//         timeout: Some(Duration::from_secs(1)),
-//         heartbeat_timeout: Some(Duration::from_secs(0)),
-//         expires_after: Some(Duration::from_secs(0)),
-//         retries: Some(3),
-//         retry_delays: None,
-//         ..Default::default() };
+    let job_req = job::CreateRequest {
+        timeout: Some(Duration::from_secs(1)),
+        heartbeat_timeout: Some(Duration::from_secs(0)),
+        expires_after: Some(Duration::from_secs(0)),
+        retries: Some(3),
+        retry_delays: None,
+        ..Default::default() };
 
-//     // create and start new job running
-//     let job_id = qw.new_running_job(&job_req).id();
-//     let job_info = qw.job_meta(job_id);
-//     assert_eq!(job_info.retries(), 3);
-//     assert_eq!(job_info.retries_attempted(), 0);
-//     assert_eq!(job_info.retry_delays(), None);
+    // create and start new job running
+    let job_id = qw.new_running_job(&mut conn, &job_req).await.id();
+    let job_info = qw.job_meta(&mut conn, job_id).await;
+    assert_eq!(job_info.retries(), 3);
+    assert_eq!(job_info.retries_attempted(), 0);
+    assert_eq!(job_info.retry_delays(), None);
 
-//     // 1st failure
-//     let job_info = qw.fail_job(job_id);
-//     assert_eq!(job_info.retries(), 3);
-//     assert_eq!(job_info.retries_attempted(), 0);
-//     assert_eq!(job_info.retry_delays(), None);
+    // 1st failure
+    let job_info = qw.fail_job(&mut conn, job_id).await;
+    assert_eq!(job_info.retries(), 3);
+    assert_eq!(job_info.retries_attempted(), 0);
+    assert_eq!(job_info.retry_delays(), None);
 
-//     // 1st retry
-//     assert_eq!(RedisManager::check_job_retries().unwrap(), vec![job_id]);
-//     let job_info = qw.job_meta(job_id);
-//     assert_eq!(job_info.status(), job::Status::Queued);
-//     assert_eq!(job_info.retries_attempted(), 1);
+    // 1st retry
+    assert_eq!(RedisManager::check_job_retries(&mut conn).await.unwrap(), vec![job_id]);
+    let job_info = qw.job_meta(&mut conn, job_id).await;
+    assert_eq!(job_info.status(), job::Status::Queued);
+    assert_eq!(job_info.retries_attempted(), 1);
 
-//     // ensure it doesn't get retried while already running
-//     let empty: Vec<u64> = Vec::new();
-//     assert_eq!(RedisManager::check_job_retries().unwrap(), empty);
+    // ensure it doesn't get retried while already running
+    let empty: Vec<u64> = Vec::new();
+    assert_eq!(RedisManager::check_job_retries(&mut conn).await.unwrap(), empty);
 
-//     // 2nd failure: job timeout
-//     let job_id = qw.next_job().id();
-//     sleep(time::Duration::from_secs(2));
-//     assert_eq!(RedisManager::check_job_timeouts().unwrap(), vec![job_id]);
-//     assert_eq!(qw.job_status(job_id), job::Status::TimedOut);
+    // 2nd failure: job timeout
+    let job_id = qw.next_job(&mut conn).await.id();
+    tokio::time::delay_for(time::Duration::from_secs(2)).await;
+    assert_eq!(RedisManager::check_job_timeouts(&mut conn).await.unwrap(), vec![job_id]);
+    assert_eq!(qw.job_status(&mut conn, job_id).await, job::Status::TimedOut);
 
-//     // 2nd retry
-//     assert_eq!(RedisManager::check_job_retries().unwrap(), vec![job_id]);
-//     let job_info = qw.job_meta(job_id);
-//     assert_eq!(job_info.status(), job::Status::Queued);
-//     assert_eq!(job_info.retries_attempted(), 2);
+    // 2nd retry
+    assert_eq!(RedisManager::check_job_retries(&mut conn).await.unwrap(), vec![job_id]);
+    let job_info = qw.job_meta(&mut conn, job_id).await;
+    assert_eq!(job_info.status(), job::Status::Queued);
+    assert_eq!(job_info.retries_attempted(), 2);
 
-//     // 3rd failure
-//     let job_id = qw.next_job().id();
-//     qw.fail_job(job_id);
+    // 3rd failure
+    let job_id = qw.next_job(&mut conn).await.id();
+    qw.fail_job(&mut conn, job_id).await;
 
-//     // 3rd retry
-//     assert_eq!(RedisManager::check_job_retries().unwrap(), vec![job_id]);
-//     let job_info = qw.job_meta(job_id);
-//     assert_eq!(job_info.status(), job::Status::Queued);
-//     assert_eq!(job_info.retries_attempted(), 3);
+    // 3rd retry
+    assert_eq!(RedisManager::check_job_retries(&mut conn).await.unwrap(), vec![job_id]);
+    let job_info = qw.job_meta(&mut conn, job_id).await;
+    assert_eq!(job_info.status(), job::Status::Queued);
+    assert_eq!(job_info.retries_attempted(), 3);
 
-//     // fail final time
-//     let job_id = qw.next_job().id();
-//     qw.fail_job(job_id);
+    // fail final time
+    let job_id = qw.next_job(&mut conn).await.id();
+    qw.fail_job(&mut conn, job_id).await;
 
-//     // ensure it doesn't get retries any more
-//     assert_eq!(RedisManager::check_job_retries().unwrap(), empty);
-//     let job_info = qw.job_meta(job_id);
-//     assert_eq!(job_info.status(), job::Status::Failed);
-//     assert_eq!(job_info.retries_attempted(), 3);
-// }
+    // ensure it doesn't get retries any more
+    assert_eq!(RedisManager::check_job_retries(&mut conn).await.unwrap(), empty);
+    let job_info = qw.job_meta(&mut conn, job_id).await;
+    assert_eq!(job_info.status(), job::Status::Failed);
+    assert_eq!(job_info.retries_attempted(), 3);
+}
 
-// #[tokio::test]
-// fn job_retry_delays() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+#[tokio::test]
+async fn job_retry_delays() {
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-//     let delays = vec![Duration::from_secs(1), Duration::from_secs(2), Duration::from_secs(4)];
-//     let job_req = job::CreateRequest {
-//         timeout: Some(Duration::from_secs(0)),
-//         heartbeat_timeout: Some(Duration::from_secs(0)),
-//         expires_after: Some(Duration::from_secs(0)),
-//         retries: Some(3),
-//         retry_delays: Some(delays.clone()),
-//         ..Default::default() };
+    let delays = vec![Duration::from_secs(1), Duration::from_secs(2), Duration::from_secs(4)];
+    let job_req = job::CreateRequest {
+        timeout: Some(Duration::from_secs(0)),
+        heartbeat_timeout: Some(Duration::from_secs(0)),
+        expires_after: Some(Duration::from_secs(0)),
+        retries: Some(3),
+        retry_delays: Some(delays.clone()),
+        ..Default::default() };
 
-//     let empty: Vec<u64> = Vec::new();
+    let empty: Vec<u64> = Vec::new();
 
-//     // create and start new job running
-//     let job_id = qw.new_running_job(&job_req).id();
+    // create and start new job running
+    let job_id = qw.new_running_job(&mut conn, &job_req).await.id();
 
-//     // 1st failure
-//     qw.fail_job(job_id);
-//     let job_info = qw.job_meta(job_id);
-//     assert_eq!(job_info.status(), job::Status::Failed);
-//     assert_eq!(job_info.retries(), 3);
-//     assert_eq!(job_info.retries_attempted(), 0);
-//     assert_eq!(job_info.retry_delays(), Some(delays));
+    // 1st failure
+    qw.fail_job(&mut conn, job_id).await;
+    let job_info = qw.job_meta(&mut conn, job_id).await;
+    assert_eq!(job_info.status(), job::Status::Failed);
+    assert_eq!(job_info.retries(), 3);
+    assert_eq!(job_info.retries_attempted(), 0);
+    assert_eq!(job_info.retry_delays(), Some(delays));
 
-//     // no retry yet
-//     assert_eq!(RedisManager::check_job_retries().unwrap(), empty);
-//     let job_info = qw.job_meta(job_id);
-//     assert_eq!(job_info.status(), job::Status::Failed);
-//     assert_eq!(job_info.retries_attempted(), 0);
+    // no retry yet
+    assert_eq!(RedisManager::check_job_retries(&mut conn).await.unwrap(), empty);
+    let job_info = qw.job_meta(&mut conn, job_id).await;
+    assert_eq!(job_info.status(), job::Status::Failed);
+    assert_eq!(job_info.retries_attempted(), 0);
 
-//     sleep(time::Duration::from_secs(2));
-// }
+    // TODO: finish off adding additional retry tests here - i.e. sleep then checking further delay times
+}
 
 // #[tokio::test]
 // fn tag_creation() {
@@ -904,61 +903,61 @@ async fn job_output() {
 //     assert_eq!(RedisManager::job_status(job_id_queued),    Ok(job::Status::Queued));
 // }
 
-// fn create_job_in_all_states(
-//     manager: &RedisManager,
-//     queue: &str,
-//     create_req: &job::CreateRequest
-// ) -> HashMap<job::Status, u64> {
-//      let mut job_req: job::CreateRequest = create_req.clone();
+async fn create_job_in_all_states(
+    conn: &mut Connection,
+    queue: &str,
+    create_req: &job::CreateRequest
+) -> HashMap<job::Status, u64> {
+     let mut job_req: job::CreateRequest = create_req.clone();
 
-//     let job_id_running = manager.create_job(queue, &job_req).unwrap();
-//     let job_id_completed = manager.create_job(queue, &job_req).unwrap();
-//     let job_id_failed = manager.create_job(queue, &job_req).unwrap();
-//     let job_id_cancelled = manager.create_job(queue, &job_req).unwrap();
+    let job_id_running = RedisManager::create_job(conn, queue, &job_req).await.unwrap();
+    let job_id_completed = RedisManager::create_job(conn, queue, &job_req).await.unwrap();
+    let job_id_failed = RedisManager::create_job(conn, queue, &job_req).await.unwrap();
+    let job_id_cancelled = RedisManager::create_job(conn, queue, &job_req).await.unwrap();
 
-//     job_req.timeout = Some(Duration::from_secs(1));
-//     let job_id_timed_out = manager.create_job(queue, &job_req).unwrap();
-//     let job_id_queued = manager.create_job(queue, &job_req).unwrap();
+    job_req.timeout = Some(Duration::from_secs(1));
+    let job_id_timed_out = RedisManager::create_job(conn, queue, &job_req).await.unwrap();
+    let job_id_queued = RedisManager::create_job(conn, queue, &job_req).await.unwrap();
 
-//     let mut update_req = job::UpdateRequest::default();
+    let mut update_req = job::UpdateRequest::default();
 
-//     // leave 1st job as running
-//     manager.next_queued_job(queue).unwrap();
+    // leave 1st job as running
+    RedisManager::next_queued_job(conn, queue).await.unwrap();
 
-//     // complete 2nd job
-//     manager.next_queued_job(queue).unwrap();
-//     update_req.status = Some(job::Status::Completed);
-//     manager.update_job(job_id_completed, &update_req).unwrap();
+    // complete 2nd job
+    RedisManager::next_queued_job(conn, queue).await.unwrap();
+    update_req.status = Some(job::Status::Completed);
+    RedisManager::update_job(conn, job_id_completed, &update_req).await.unwrap();
 
-//     // fail 3rd job
-//     manager.next_queued_job(queue).unwrap();
-//     update_req.status = Some(job::Status::Failed);
-//     manager.update_job(job_id_failed, &update_req).unwrap();
+    // fail 3rd job
+    RedisManager::next_queued_job(conn, queue).await.unwrap();
+    update_req.status = Some(job::Status::Failed);
+    RedisManager::update_job(conn, job_id_failed, &update_req).await.unwrap();
 
-//     // cancel 4th job
-//     manager.next_queued_job(queue).unwrap();
-//     update_req.status = Some(job::Status::Cancelled);
-//     manager.update_job(job_id_cancelled, &update_req).unwrap();
+    // cancel 4th job
+    RedisManager::next_queued_job(conn, queue).await.unwrap();
+    update_req.status = Some(job::Status::Cancelled);
+    RedisManager::update_job(conn, job_id_cancelled, &update_req).await.unwrap();
 
-//     // 5th job should timeout
-//     manager.next_queued_job(queue).unwrap();
+    // 5th job should timeout
+    RedisManager::next_queued_job(conn, queue).await.unwrap();
 
-//     sleep(time::Duration::from_secs(2));
-//     assert_eq!(manager.check_job_timeouts().unwrap(), vec![job_id_timed_out]);
+    tokio::time::delay_for(time::Duration::from_secs(2)).await;
+    assert_eq!(RedisManager::check_job_timeouts(conn).await.unwrap(), vec![job_id_timed_out]);
 
-//     assert_eq!(manager.job_status(job_id_running), Ok(job::Status::Running));
-//     assert_eq!(manager.job_status(job_id_completed), Ok(job::Status::Completed));
-//     assert_eq!(manager.job_status(job_id_failed), Ok(job::Status::Failed));
-//     assert_eq!(manager.job_status(job_id_cancelled), Ok(job::Status::Cancelled));
-//     assert_eq!(manager.job_status(job_id_timed_out), Ok(job::Status::TimedOut));
-//     assert_eq!(manager.job_status(job_id_queued), Ok(job::Status::Queued));
+    assert_eq!(RedisManager::job_status(conn, job_id_running).await, Ok(job::Status::Running));
+    assert_eq!(RedisManager::job_status(conn, job_id_completed).await, Ok(job::Status::Completed));
+    assert_eq!(RedisManager::job_status(conn, job_id_failed).await, Ok(job::Status::Failed));
+    assert_eq!(RedisManager::job_status(conn, job_id_cancelled).await, Ok(job::Status::Cancelled));
+    assert_eq!(RedisManager::job_status(conn, job_id_timed_out).await, Ok(job::Status::TimedOut));
+    assert_eq!(RedisManager::job_status(conn, job_id_queued).await, Ok(job::Status::Queued));
 
-//     let mut map = HashMap::with_capacity(6);
-//     map.insert(job::Status::Running, job_id_running);
-//     map.insert(job::Status::Completed, job_id_completed);
-//     map.insert(job::Status::Failed, job_id_failed);
-//     map.insert(job::Status::Cancelled, job_id_cancelled);
-//     map.insert(job::Status::TimedOut, job_id_timed_out);
-//     map.insert(job::Status::Queued, job_id_queued);
-//     map
-// }
+    let mut map = HashMap::with_capacity(6);
+    map.insert(job::Status::Running, job_id_running);
+    map.insert(job::Status::Completed, job_id_completed);
+    map.insert(job::Status::Failed, job_id_failed);
+    map.insert(job::Status::Cancelled, job_id_cancelled);
+    map.insert(job::Status::TimedOut, job_id_timed_out);
+    map.insert(job::Status::Queued, job_id_queued);
+    map
+}
