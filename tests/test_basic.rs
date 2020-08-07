@@ -492,262 +492,262 @@ async fn job_retry_delays() {
     // TODO: finish off adding additional retry tests here - i.e. sleep then checking further delay times
 }
 
-// #[tokio::test]
-// fn tag_creation() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+#[tokio::test]
+async fn tag_creation() {
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-//     assert_eq!(qw.new_default_job().tags(), None);
+    assert_eq!(qw.new_default_job(&mut conn).await.tags(), None);
 
-//     // maintain list of all job IDs which have been given tag "foo"
-//     let mut foo_tagged = Vec::new();
+    // maintain list of all job IDs which have been given tag "foo"
+    let mut foo_tagged = Vec::new();
 
-//     let tags = vec!["foo".to_string(),
-//                     "another-tag".to_string(),
-//                     "3rd.tag_example".to_string()];
-//     let job_req = job::CreateRequest { tags: Some(tags.clone()), ..Default::default() };
-//     let job_id = qw.new_job(&job_req).id();
-//     assert_eq!(qw.job_meta(job_id).tags(), Some(tags.clone()));
-//     foo_tagged.push(job_id);
+    let tags = vec!["foo".to_string(),
+                    "another-tag".to_string(),
+                    "3rd.tag_example".to_string()];
+    let job_req = job::CreateRequest { tags: Some(tags.clone()), ..Default::default() };
+    let job_id = qw.new_job(&mut conn, &job_req).await.id();
+    assert_eq!(qw.job_meta(&mut conn, job_id).await.tags(), Some(tags.clone()));
+    foo_tagged.push(job_id);
 
-//     // should get empty list for non-existent tags
-//     assert_eq!(RedisManager::tagged_job_ids("some_tag"), Ok(Vec::new()));
+    // should get empty list for non-existent tags
+    assert_eq!(RedisManager::tagged_job_ids(&mut conn, "some_tag").await, Ok(Vec::new()));
 
-//     // should get single job
-//     for tag in &tags {
-//         assert_eq!(RedisManager::tagged_job_ids(tag), Ok(vec![job_id]));
-//     }
+    // should get single job
+    for tag in &tags {
+        assert_eq!(RedisManager::tagged_job_ids(&mut conn, tag).await, Ok(vec![job_id]));
+    }
 
-//     let tags = vec!["foo".to_string(), "bar".to_string()];
-//     let job_req = job::CreateRequest { tags: Some(tags.clone()), ..Default::default() };
+    let tags = vec!["foo".to_string(), "bar".to_string()];
+    let job_req = job::CreateRequest { tags: Some(tags.clone()), ..Default::default() };
 
-//     let job_id = qw.new_job(&job_req).id();
-//     assert_eq!(qw.job_meta(job_id).tags(), Some(tags.clone()));
-//     foo_tagged.push(job_id);
+    let job_id = qw.new_job(&mut conn, &job_req).await.id();
+    assert_eq!(qw.job_meta(&mut conn, job_id).await.tags(), Some(tags.clone()));
+    foo_tagged.push(job_id);
 
-//     let job_id = qw.new_job(&job_req).id();
-//     assert_eq!(qw.job_meta(job_id).tags(), Some(tags.clone()));
-//     foo_tagged.push(job_id);
+    let job_id = qw.new_job(&mut conn, &job_req).await.id();
+    assert_eq!(qw.job_meta(&mut conn, job_id).await.tags(), Some(tags.clone()));
+    foo_tagged.push(job_id);
 
-//     let job_id = qw.new_job(&job_req).id();
-//     assert_eq!(qw.job_meta(job_id).tags(), Some(tags.clone()));
-//     foo_tagged.push(job_id);
+    let job_id = qw.new_job(&mut conn, &job_req).await.id();
+    assert_eq!(qw.job_meta(&mut conn, job_id).await.tags(), Some(tags.clone()));
+    foo_tagged.push(job_id);
 
-//     foo_tagged.sort();
-//     assert_eq!(RedisManager::tagged_job_ids("foo"), Ok(foo_tagged));
-// }
+    foo_tagged.sort();
+    assert_eq!(RedisManager::tagged_job_ids(&mut conn, "foo").await, Ok(foo_tagged));
+}
 
-// #[tokio::test]
-// fn tag_deletion() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+#[tokio::test]
+async fn tag_deletion() {
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-//     let tags = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+    let tags = vec!["a".to_string(), "b".to_string(), "c".to_string()];
 
-//     // ensure no job IDs are returned for non-existent tags
-//     for tag in &tags {
-//         assert_eq!(RedisManager::tagged_job_ids(tag), Ok(Vec::new()));
-//     }
+    // ensure no job IDs are returned for non-existent tags
+    for tag in &tags {
+        assert_eq!(RedisManager::tagged_job_ids(&mut conn, tag).await, Ok(Vec::new()));
+    }
 
-//     // ensure tag info returned for jobs, and job info returned for tags
-//     let job_req = job::CreateRequest { tags: Some(tags.clone()), ..Default::default() };
-//     let tagged_ids: Vec<u64> = (0..4).map(|_| {
-//         let job_id = qw.new_job(&job_req).id();
-//         assert_eq!(RedisManager::job_fields(job_id, None).unwrap().tags(), Some(tags.clone()));
-//         job_id
-//     }).collect();
+    // ensure tag info returned for jobs, and job info returned for tags
+    let job_req = job::CreateRequest { tags: Some(tags.clone()), ..Default::default() };
+    let mut tagged_ids = Vec::new();
+    for _ in 0..4 {
+        let job_id = qw.new_job(&mut conn, &job_req).await.id();
+        assert_eq!(RedisManager::job_fields(&mut conn, job_id, None).await.unwrap().tags(), Some(tags.clone()));
+        tagged_ids.push(job_id);
+    }
 
-//     for tag in &tags {
-//         assert_eq!(RedisManager::tagged_job_ids(tag).unwrap(), tagged_ids);
-//     }
+    for tag in &tags {
+        assert_eq!(RedisManager::tagged_job_ids(&mut conn, tag).await.unwrap(), tagged_ids);
+    }
 
-//     // TODO: add when deletion actually added
-// }
+    // TODO: add when deletion actually added
+}
 
-// #[tokio::test]
-// fn job_starting() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+#[tokio::test]
+async fn job_starting() {
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-//     let input: serde_json::Value = vec![1, 2, 3].into();
-//     let mut job_req = job::CreateRequest::default();
-//     job_req.input = Some(input.clone());
-//     let job_id = qw.new_job(&job_req).id();
+    let input: serde_json::Value = vec![1, 2, 3].into();
+    let mut job_req = job::CreateRequest::default();
+    job_req.input = Some(input.clone());
+    let job_id = qw.new_job(&mut conn, &job_req).await.id();
 
-//     let job_payload = qw.next_job();
-//     assert_eq!(job_payload.id(), job_id);
-//     assert_eq!(job_payload.input(), &Some(input.clone()));
+    let job_payload = qw.next_job(&mut conn).await;
+    assert_eq!(job_payload.id(), job_id);
+    assert_eq!(job_payload.input(), &Some(input.clone()));
 
-//     let job_info = qw.job_meta(job_id);
-//     assert_eq!(job_info.queue(), DEFAULT_QUEUE);
-//     assert_eq!(job_info.status(), job::Status::Running);
-//     assert!(job_info.started_at().is_some());
-//     assert!(job_info.ended_at().is_none());
-//     assert!(job_info.last_heartbeat().is_none());
-//     assert_eq!(job_info.input(), Some(input));
-//     assert!(job_info.output().is_none());
-// }
+    let job_info = qw.job_meta(&mut conn, job_id).await;
+    assert_eq!(job_info.queue(), DEFAULT_QUEUE);
+    assert_eq!(job_info.status(), job::Status::Running);
+    assert!(job_info.started_at().is_some());
+    assert!(job_info.ended_at().is_none());
+    assert!(job_info.last_heartbeat().is_none());
+    assert_eq!(job_info.input(), Some(input));
+    assert!(job_info.output().is_none());
+}
 
-// #[tokio::test]
-// fn job_fields() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+#[tokio::test]
+async fn job_fields() {
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-//     let job_meta = qw.new_default_job();
-//     let job_id = job_meta.id();
+    let job_meta = qw.new_default_job(&mut conn).await;
+    let job_id = job_meta.id();
 
-//     // single fields
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::Id]).id(), 1);
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::Queue]).queue(), DEFAULT_QUEUE);
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::Status]).status(), job::Status::Queued);
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::Tags]).tags(), None);
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::CreatedAt]).created_at(), job_meta.created_at());
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::StartedAt]).started_at(), None);
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::EndedAt]).ended_at(), None);
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::LastHeartbeat]).last_heartbeat(), None);
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::Input]).input(), None);
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::Output]).output(), None);
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::Timeout]).timeout(), job_meta.timeout());
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::HeartbeatTimeout]).heartbeat_timeout(), job_meta.heartbeat_timeout());
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::ExpiresAfter]).expires_after(), job_meta.expires_after());
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::Retries]).retries(), job_meta.retries());
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::RetriesAttempted]).retries_attempted(), 0);
-//     assert_eq!(qw.job_fields(job_id, &[job::Field::RetryDelays]).retry_delays(), None);
+    // single fields
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::Id]).await.id(), 1);
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::Queue]).await.queue(), DEFAULT_QUEUE);
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::Status]).await.status(), job::Status::Queued);
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::Tags]).await.tags(), None);
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::CreatedAt]).await.created_at(), job_meta.created_at());
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::StartedAt]).await.started_at(), None);
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::EndedAt]).await.ended_at(), None);
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::LastHeartbeat]).await.last_heartbeat(), None);
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::Input]).await.input(), None);
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::Output]).await.output(), None);
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::Timeout]).await.timeout(), job_meta.timeout());
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::HeartbeatTimeout]).await.heartbeat_timeout(), job_meta.heartbeat_timeout());
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::ExpiresAfter]).await.expires_after(), job_meta.expires_after());
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::Retries]).await.retries(), job_meta.retries());
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::RetriesAttempted]).await.retries_attempted(), 0);
+    assert_eq!(qw.job_fields(&mut conn, job_id, &[job::Field::RetryDelays]).await.retry_delays(), None);
 
-//     // multiple fields
-//     let jm = qw.job_fields(job_id, &[job::Field::Status, job::Field::Output]);
-//     assert_eq!(jm.status(), job_meta.status());
-//     assert_eq!(jm.output(), job_meta.output());
+    // multiple fields
+    let jm = qw.job_fields(&mut conn, job_id, &[job::Field::Status, job::Field::Output]).await;
+    assert_eq!(jm.status(), job_meta.status());
+    assert_eq!(jm.output(), job_meta.output());
 
-//     let jm = qw.job_fields(job_id, &[job::Field::Id, job::Field::Tags, job::Field::RetryDelays]);
-//     assert_eq!(jm.id(), job_meta.id());
-//     assert_eq!(jm.tags(), job_meta.tags());
-//     assert_eq!(jm.retry_delays(), job_meta.retry_delays());
+    let jm = qw.job_fields(&mut conn, job_id, &[job::Field::Id, job::Field::Tags, job::Field::RetryDelays]).await;
+    assert_eq!(jm.id(), job_meta.id());
+    assert_eq!(jm.tags(), job_meta.tags());
+    assert_eq!(jm.retry_delays(), job_meta.retry_delays());
 
-//     // all fields
-//     let jm = RedisManager::job_fields(job_id, None).unwrap();
-//     assert_eq!(jm.id(), job_meta.id());
-//     assert_eq!(jm.status(), job_meta.status());
-//     assert_eq!(jm.output(), job_meta.output());
-//     assert_eq!(jm.tags(), job_meta.tags());
-//     assert_eq!(jm.retry_delays(), job_meta.retry_delays());
+    // all fields
+    let jm = RedisManager::job_fields(&mut conn, job_id, None).await.unwrap();
+    assert_eq!(jm.id(), job_meta.id());
+    assert_eq!(jm.status(), job_meta.status());
+    assert_eq!(jm.output(), job_meta.output());
+    assert_eq!(jm.tags(), job_meta.tags());
+    assert_eq!(jm.retry_delays(), job_meta.retry_delays());
+}
 
-// }
+#[tokio::test]
+async fn update_job_heartbeat() {
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-// #[tokio::test]
-// fn update_job_heartbeat() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+    qw.new_default_job(&mut conn).await;
+    let job_id = qw.next_job(&mut conn).await.id();
+    assert!(qw.job_meta(&mut conn, job_id).await.last_heartbeat().is_none());
 
-//     qw.new_default_job();
-//     let job_id = qw.next_job().id();
-//     assert!(qw.job_meta(job_id).last_heartbeat().is_none());
+    RedisManager::update_job_heartbeat(&mut conn, job_id).await.unwrap();
+    let hb1 = qw.job_meta(&mut conn, job_id).await.last_heartbeat().unwrap();
 
-//     RedisManager::update_job_heartbeat(job_id).unwrap();
-//     let hb1 = qw.job_meta(job_id).last_heartbeat().unwrap();
+    tokio::time::delay_for(time::Duration::from_secs(1)).await;
 
-//     sleep(time::Duration::from_secs(1));
+    RedisManager::update_job_heartbeat(&mut conn, job_id).await.unwrap();
+    let hb2 = qw.job_meta(&mut conn, job_id).await.last_heartbeat().unwrap();
 
-//     RedisManager::update_job_heartbeat(job_id).unwrap();
-//     let hb2 = qw.job_meta(job_id).last_heartbeat().unwrap();
+    assert!(hb2 > hb1);
+}
 
-//     assert!(hb2 > hb1);
-// }
+#[tokio::test]
+async fn update_job_output() {
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-// #[tokio::test]
-// fn update_job_output() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+    // can only update jobs if they exist
+    match RedisManager::set_job_output(&mut conn, 21, &"foo".into()).await {
+        Err(OcyError::NoSuchJob(21)) => (),
+        x                              => assert!(false, "Unexpected result: {:?}", x),
+    }
 
-//     // can only update jobs if they exist
-//     match RedisManager::set_job_output(21, &"foo".into()) {
-//         Err(OcyError::NoSuchJob(21)) => (),
-//         x                              => assert!(false, "Unexpected result: {:?}", x),
-//     }
+    let job_id = qw.new_default_job(&mut conn).await.id();
 
-//     let job_id = qw.new_default_job().id();
+    // can only update output for running jobs
+    match RedisManager::set_job_output(&mut conn, job_id, &"foo".into()).await {
+        Err(OcyError::Conflict(_)) => (),
+        x                              => assert!(false, "Unexpected result: {:?}", x),
+    }
 
-//     // can only update output for running jobs
-//     match RedisManager::set_job_output(job_id, &"foo".into()) {
-//         Err(OcyError::Conflict(_)) => (),
-//         x                              => assert!(false, "Unexpected result: {:?}", x),
-//     }
+    // ensure output is initially unset
+    let job_id = qw.next_job(&mut conn).await.id();
+    assert!(qw.job_meta(&mut conn, job_id).await.output().is_none());
 
-//     // ensure output is initially unset
-//     let job_id = qw.next_job().id();
-//     assert!(qw.job_meta(job_id).output().is_none());
+    // ensure output is set
+    RedisManager::set_job_output(&mut conn, job_id, &"foo".into()).await.unwrap();
+    assert_eq!(qw.job_meta(&mut conn, job_id).await.output(), Some("foo".into()));
 
-//     // ensure output is set
-//     RedisManager::set_job_output(job_id, &"foo".into()).unwrap();
-//     assert_eq!(qw.job_meta(job_id).output(), Some("foo".into()));
+    // ensure output is overwritten
+    let map = serde_json::from_str("{\"a\": 1, \"b\": 2}").unwrap();
+    RedisManager::set_job_output(&mut conn, job_id, &map).await.unwrap();
+    assert_eq!(qw.job_meta(&mut conn, job_id).await.output(), Some(map));
+}
 
-//     // ensure output is overwritten
-//     let map = serde_json::from_str("{\"a\": 1, \"b\": 2}").unwrap();
-//     RedisManager::set_job_output(job_id, &map).unwrap();
-//     assert_eq!(qw.job_meta(job_id).output(), Some(map));
-// }
+#[tokio::test]
+async fn queued_status_transitions() {
+    // TODO: add transitions for retries:
+    // Cancelled -> Queued
+    // Failed -> Queued
+    // TimedOut -> Queued
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-// #[tokio::test]
-// fn queued_status_transitions() {
-//     // TODO: add transitions for retries:
-//     // Cancelled -> Queued
-//     // Failed -> Queued
-//     // TimedOut -> Queued
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+    // cannot manually change from Queued, only `next_job` does this
+    let job_id = qw.new_default_job(&mut conn).await.id();
+    let not_allowed = &[job::Status::Queued,
+                        job::Status::Running,
+                        job::Status::Failed,
+                        job::Status::Completed,
+                        job::Status::TimedOut];
+    for new_status in not_allowed {
+        match RedisManager::set_job_status(&mut conn, job_id, new_status).await {
+            Err(OcyError::Conflict(_)) => (),
+            x => assert!(false, "Unexpected result when changing status Queued -> {}: {:?}", new_status, x),
+        }
+    }
 
-//     // cannot manually change from Queued, only `next_job` does this
-//     let job_id = qw.new_default_job().id();
-//     let not_allowed = &[job::Status::Queued,
-//                         job::Status::Running,
-//                         job::Status::Failed,
-//                         job::Status::Completed,
-//                         job::Status::TimedOut];
-//     for new_status in not_allowed {
-//         match RedisManager::set_job_status(job_id, new_status) {
-//             Err(OcyError::Conflict(_)) => (),
-//             x => assert!(false, "Unexpected result when changing status Queued -> {}: {:?}", new_status, x),
-//         }
-//     }
+    // queued jobs can be cancelled
+    RedisManager::set_job_status(&mut conn, job_id, &job::Status::Cancelled).await.unwrap();
+    let job_info = qw.job_meta(&mut conn, job_id).await;
+    assert_eq!(job_info.status(), job::Status::Cancelled);
+    assert!(job_info.ended_at().is_some());
+}
 
-//     // queued jobs can be cancelled
-//     RedisManager::set_job_status(job_id, &job::Status::Cancelled).unwrap();
-//     let job_info = qw.job_meta(job_id);
-//     assert_eq!(job_info.status(), job::Status::Cancelled);
-//     assert!(job_info.ended_at().is_some());
-// }
+#[tokio::test]
+async fn running_status_transitions() {
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-// #[tokio::test]
-// fn running_status_transitions() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+    let not_allowed = &[
+        job::Status::Queued,   // cannot re-queue a running job
+        job::Status::Running,  // job is already running
+    ];
+    let job_id = qw.new_running_default_job(&mut conn).await.id();
+    for new_status in not_allowed {
+        match RedisManager::set_job_status(&mut conn, job_id, new_status).await {
+            Err(OcyError::Conflict(_)) => (),
+            x => assert!(false, "Unexpected result when changing status Running -> {}: {:?}", new_status, x),
+        }
+    }
 
-//     let not_allowed = &[
-//         job::Status::Queued,   // cannot re-queue a running job
-//         job::Status::Running,  // job is already running
-//     ];
-//     let job_id = qw.new_running_default_job().id();
-//     for new_status in not_allowed {
-//         match RedisManager::set_job_status(job_id, new_status) {
-//             Err(OcyError::Conflict(_)) => (),
-//             x => assert!(false, "Unexpected result when changing status Running -> {}: {:?}", new_status, x),
-//         }
-//     }
-
-//     let allowed = &[
-//         job::Status::Cancelled,
-//         job::Status::Completed,
-//         job::Status::Failed,
-//         job::Status::TimedOut, // TODO: should this be limited to being set by the server only?
-//     ];
-//     for new_status in allowed {
-//         let job_id = qw.new_running_default_job().id();
-//         RedisManager::set_job_status(job_id, new_status).unwrap();
-//         let job_info = qw.job_meta(job_id);
-//         assert_eq!(job_info.status(), *new_status);
-//         assert!(job_info.ended_at().is_some());
-//     }
-// }
+    let allowed = &[
+        job::Status::Cancelled,
+        job::Status::Completed,
+        job::Status::Failed,
+        job::Status::TimedOut, // TODO: should this be limited to being set by the server only?
+    ];
+    for new_status in allowed {
+        let job_id = qw.new_running_default_job(&mut conn).await.id();
+        RedisManager::set_job_status(&mut conn, job_id, new_status).await.unwrap();
+        let job_info = qw.job_meta(&mut conn, job_id).await;
+        assert_eq!(job_info.status(), *new_status);
+        assert!(job_info.ended_at().is_some());
+    }
+}
 
 // #[tokio::test]
 // fn completed_status_transitions() {
