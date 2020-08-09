@@ -187,7 +187,6 @@ async fn queue_names() {
 async fn queue_settings() {
     let (_ctx, mut conn) = init().await;
     let queue_name = "a";
-    let qw = QueueWrapper::new(queue_name);
     let mut settings = queue::Settings {
         timeout: Duration::from_secs(600),
         heartbeat_timeout: Duration::from_secs(30),
@@ -297,7 +296,7 @@ async fn job_output() {
 #[tokio::test]
 async fn job_deletion() {
     let (_ctx, mut conn) = init().await;
-    let qw = QueueWrapper::with_default_queue(&mut conn).await;
+    let _qw = QueueWrapper::with_default_queue(&mut conn).await;
 
     let tags = vec!["tag".to_string()];
     let job_req = job::CreateRequest { tags: Some(tags), ..Default::default() };
@@ -749,159 +748,158 @@ async fn running_status_transitions() {
     }
 }
 
-// #[tokio::test]
-// fn completed_status_transitions() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+#[tokio::test]
+async fn completed_status_transitions() {
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-//     // once completed, job status cannot be changed
-//     let job_id = qw.new_running_default_job().id();
-//     qw.complete_job(job_id);
-//     let not_allowed = &[
-//         job::Status::Completed,
-//         job::Status::Queued,
-//         job::Status::Running,
-//         job::Status::Failed,
-//         job::Status::Completed,
-//         job::Status::TimedOut
-//     ];
-//     for new_status in not_allowed {
-//         match RedisManager::set_job_status(job_id, new_status) {
-//             Err(OcyError::Conflict(_)) => (),
-//             x => assert!(false, "Unexpected result when changing status Completed -> {}: {:?}", new_status, x),
-//         }
-//     }
-// }
+    // once completed, job status cannot be changed
+    let job_id = qw.new_running_default_job(&mut conn).await.id();
+    qw.complete_job(&mut conn, job_id).await;
+    let not_allowed = &[
+        job::Status::Completed,
+        job::Status::Queued,
+        job::Status::Running,
+        job::Status::Failed,
+        job::Status::Completed,
+        job::Status::TimedOut
+    ];
+    for new_status in not_allowed {
+        match RedisManager::set_job_status(&mut conn, job_id, new_status).await {
+            Err(OcyError::Conflict(_)) => (),
+            x => assert!(false, "Unexpected result when changing status Completed -> {}: {:?}", new_status, x),
+        }
+    }
+}
 
-// #[tokio::test]
-// fn check_ping() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
-//     RedisManager::check_ping().unwrap();
-// }
+#[tokio::test]
+async fn check_ping() {
+    let (_ctx, mut conn) = init().await;
+    RedisManager::check_ping(&mut conn).await.unwrap();
+}
 
-// #[tokio::test]
-// fn job_heartbeat_timeout() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+#[tokio::test]
+async fn job_heartbeat_timeout() {
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-//     let mut job_req = job::CreateRequest {
-//         timeout: Some(Duration::from_secs(3600)),
-//         heartbeat_timeout: Some(Duration::from_secs(1)),
-//         expires_after: Some(Duration::from_secs(3600)),
-//         ..Default::default()
-//     };
-//     let job_id_a = qw.new_job(&job_req).id();
+    let mut job_req = job::CreateRequest {
+        timeout: Some(Duration::from_secs(3600)),
+        heartbeat_timeout: Some(Duration::from_secs(1)),
+        expires_after: Some(Duration::from_secs(3600)),
+        ..Default::default()
+    };
+    let job_id_a = qw.new_job(&mut conn, &job_req).await.id();
 
-//     job_req.heartbeat_timeout = Some(Duration::from_secs(3));
-//     let job_id_b = qw.new_job(&job_req).id();
-//     let job_id_c = qw.new_job(&job_req).id();
+    job_req.heartbeat_timeout = Some(Duration::from_secs(3));
+    let job_id_b = qw.new_job(&mut conn, &job_req).await.id();
+    let job_id_c = qw.new_job(&mut conn, &job_req).await.id();
 
-//     qw.next_job();
-//     qw.next_job();
-//     qw.next_job();
+    qw.next_job(&mut conn).await;
+    qw.next_job(&mut conn).await;
+    qw.next_job(&mut conn).await;
 
-//     assert_eq!(qw.job_status(job_id_a), job::Status::Running);
-//     assert_eq!(qw.job_status(job_id_b), job::Status::Running);
-//     assert_eq!(qw.job_status(job_id_c), job::Status::Running);
+    assert_eq!(qw.job_status(&mut conn, job_id_a).await, job::Status::Running);
+    assert_eq!(qw.job_status(&mut conn, job_id_b).await, job::Status::Running);
+    assert_eq!(qw.job_status(&mut conn, job_id_c).await, job::Status::Running);
 
-//     sleep(time::Duration::from_secs(2));
-//     assert_eq!(RedisManager::check_job_timeouts().unwrap(), vec![job_id_a]);
-//     assert_eq!(qw.job_status(job_id_a), job::Status::TimedOut);
-//     assert_eq!(qw.job_status(job_id_b), job::Status::Running);
-//     assert_eq!(qw.job_status(job_id_c), job::Status::Running);
+    tokio::time::delay_for(time::Duration::from_secs(2)).await;
+    assert_eq!(RedisManager::check_job_timeouts(&mut conn).await.unwrap(), vec![job_id_a]);
+    assert_eq!(qw.job_status(&mut conn, job_id_a).await, job::Status::TimedOut);
+    assert_eq!(qw.job_status(&mut conn, job_id_b).await, job::Status::Running);
+    assert_eq!(qw.job_status(&mut conn, job_id_c).await, job::Status::Running);
 
-//     RedisManager::update_job_heartbeat(job_id_c).unwrap();
-//     sleep(time::Duration::from_secs(2));
-//     assert_eq!(RedisManager::check_job_timeouts().unwrap(), vec![job_id_b]);
-//     assert_eq!(qw.job_status(job_id_a), job::Status::TimedOut);
-//     assert_eq!(qw.job_status(job_id_b), job::Status::TimedOut);
-//     assert_eq!(qw.job_status(job_id_c), job::Status::Running);
+    RedisManager::update_job_heartbeat(&mut conn, job_id_c).await.unwrap();
+    tokio::time::delay_for(time::Duration::from_secs(2)).await;
+    assert_eq!(RedisManager::check_job_timeouts(&mut conn).await.unwrap(), vec![job_id_b]);
+    assert_eq!(qw.job_status(&mut conn, job_id_a).await, job::Status::TimedOut);
+    assert_eq!(qw.job_status(&mut conn, job_id_b).await, job::Status::TimedOut);
+    assert_eq!(qw.job_status(&mut conn, job_id_c).await, job::Status::Running);
 
-//     assert_eq!(qw.job_meta(job_id_a).last_heartbeat(), None);
-//     assert_eq!(qw.job_meta(job_id_b).last_heartbeat(), None);
-//     assert!(qw.job_meta(job_id_c).last_heartbeat().is_some());
-// }
+    assert_eq!(qw.job_meta(&mut conn, job_id_a).await.last_heartbeat(), None);
+    assert_eq!(qw.job_meta(&mut conn, job_id_b).await.last_heartbeat(), None);
+    assert!(qw.job_meta(&mut conn, job_id_c).await.last_heartbeat().is_some());
+}
 
-// #[tokio::test]
-// fn job_timeout() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+#[tokio::test]
+async fn job_timeout() {
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-//     let mut job_req = job::CreateRequest {
-//         timeout: Some(Duration::from_secs(1)),
-//         heartbeat_timeout: Some(Duration::from_secs(3600)),
-//         expires_after: Some(Duration::from_secs(3600)),
-//         ..Default::default()
-//     };
-//     let job_id_a = qw.new_job(&job_req).id();
+    let mut job_req = job::CreateRequest {
+        timeout: Some(Duration::from_secs(1)),
+        heartbeat_timeout: Some(Duration::from_secs(3600)),
+        expires_after: Some(Duration::from_secs(3600)),
+        ..Default::default()
+    };
+    let job_id_a = qw.new_job(&mut conn, &job_req).await.id();
 
-//     job_req.timeout = Some(Duration::from_secs(3));
-//     let job_id_b = qw.new_job(&job_req).id();
+    job_req.timeout = Some(Duration::from_secs(3));
+    let job_id_b = qw.new_job(&mut conn, &job_req).await.id();
 
-//     qw.next_job();
-//     qw.next_job();
+    qw.next_job(&mut conn).await;
+    qw.next_job(&mut conn).await;
 
-//     assert_eq!(qw.job_status(job_id_a), job::Status::Running);
-//     assert_eq!(qw.job_status(job_id_b), job::Status::Running);
+    assert_eq!(qw.job_status(&mut conn, job_id_a).await, job::Status::Running);
+    assert_eq!(qw.job_status(&mut conn, job_id_b).await, job::Status::Running);
 
-//     sleep(time::Duration::from_secs(2));
-//     assert_eq!(RedisManager::check_job_timeouts().unwrap(), vec![1]);
-//     assert_eq!(qw.job_status(job_id_a), job::Status::TimedOut);
-//     assert_eq!(qw.job_status(job_id_b), job::Status::Running);
-// }
+    tokio::time::delay_for(time::Duration::from_secs(2)).await;
+    assert_eq!(RedisManager::check_job_timeouts(&mut conn).await.unwrap(), vec![1]);
+    assert_eq!(qw.job_status(&mut conn, job_id_a).await, job::Status::TimedOut);
+    assert_eq!(qw.job_status(&mut conn, job_id_b).await, job::Status::Running);
+}
 
-// #[tokio::test]
-// fn job_expiry() {
-//     let (_ctx, mut conn) = init().await;
-//     let qw = QueueWrapper::with_default_queue(&conn);
+#[tokio::test]
+async fn job_expiry() {
+    let (_ctx, mut conn) = init().await;
+    let qw = QueueWrapper::with_default_queue(&mut conn).await;
 
-//     let job_req = job::CreateRequest {
-//         timeout: Some(Duration::from_secs(3600)),
-//         heartbeat_timeout: Some(Duration::from_secs(3600)),
-//         expires_after: Some(Duration::from_secs(1)),
-//         retries: Some(0),
-//         ..Default::default()
-//     };
+    let job_req = job::CreateRequest {
+        timeout: Some(Duration::from_secs(3600)),
+        heartbeat_timeout: Some(Duration::from_secs(3600)),
+        expires_after: Some(Duration::from_secs(1)),
+        retries: Some(0),
+        ..Default::default()
+    };
 
-//     let jobs = create_job_in_all_states(&qw.manager, DEFAULT_QUEUE, &job_req);
-//     let job_id_running = jobs[&job::Status::Running];
-//     let job_id_completed = jobs[&job::Status::Completed];
-//     let job_id_failed = jobs[&job::Status::Failed];
-//     let job_id_cancelled = jobs[&job::Status::Cancelled];
-//     let job_id_timed_out = jobs[&job::Status::TimedOut];
-//     let job_id_queued = jobs[&job::Status::Queued];
+    let jobs = create_job_in_all_states(&mut conn, DEFAULT_QUEUE, &job_req).await;
+    let job_id_running = jobs[&job::Status::Running];
+    let job_id_completed = jobs[&job::Status::Completed];
+    let job_id_failed = jobs[&job::Status::Failed];
+    let job_id_cancelled = jobs[&job::Status::Cancelled];
+    let job_id_timed_out = jobs[&job::Status::TimedOut];
+    let job_id_queued = jobs[&job::Status::Queued];
 
-//     // confirm all jobs are in correct queues
-//     assert_eq!(RedisManager::running_queue_size().unwrap(), 1);
-//     assert_eq!(RedisManager::failed_queue_size().unwrap(), 2); // one failed, one timed out
-//     assert_eq!(RedisManager::ended_queue_size().unwrap(), 2); // one completed, one cancelled
-//     assert_eq!(qw.queue_size(), 1);
+    // confirm all jobs are in correct queues
+    assert_eq!(RedisManager::running_queue_size(&mut conn).await.unwrap(), 1);
+    assert_eq!(RedisManager::failed_queue_size(&mut conn).await.unwrap(), 2); // one failed, one timed out
+    assert_eq!(RedisManager::ended_queue_size(&mut conn).await.unwrap(), 2); // one completed, one cancelled
+    assert_eq!(qw.queue_size(&mut conn).await, 1);
 
-//     // jobs in ended queue (i.e. one completed and one cancelled) should expire
-//     let mut expected_expired = vec![job_id_completed, job_id_cancelled,];
-//     expected_expired.sort();
-//     sleep(time::Duration::from_secs(2));
-//     let mut expired = RedisManager::check_job_expiry().unwrap();
-//     expired.sort();
-//     assert_eq!(expired, expected_expired);
+    // jobs in ended queue (i.e. one completed and one cancelled) should expire
+    let mut expected_expired = vec![job_id_completed, job_id_cancelled,];
+    expected_expired.sort();
+    tokio::time::delay_for(time::Duration::from_secs(2)).await;
+    let mut expired = RedisManager::check_job_expiry(&mut conn).await.unwrap();
+    expired.sort();
+    assert_eq!(expired, expected_expired);
 
-//     // no retries, failed/timed out jobs should be moved to ended queue, then expire next call
-//     assert_eq!(RedisManager::check_job_retries().unwrap(), Vec::<u64>::new());
-//      let mut expected_expired = vec![job_id_failed, job_id_timed_out];
-//     expected_expired.sort();
-//     sleep(time::Duration::from_secs(2));
-//     let mut expired = RedisManager::check_job_expiry().unwrap();
-//     expired.sort();
-//     assert_eq!(expired, expected_expired);
+    // no retries, failed/timed out jobs should be moved to ended queue, then expire next call
+    assert_eq!(RedisManager::check_job_retries(&mut conn).await.unwrap(), Vec::<u64>::new());
+     let mut expected_expired = vec![job_id_failed, job_id_timed_out];
+    expected_expired.sort();
+    tokio::time::delay_for(time::Duration::from_secs(2)).await;
+    let mut expired = RedisManager::check_job_expiry(&mut conn).await.unwrap();
+    expired.sort();
+    assert_eq!(expired, expected_expired);
 
-//     assert_eq!(RedisManager::job_status(job_id_running),   Ok(job::Status::Running));
-//     assert_eq!(RedisManager::job_status(job_id_completed), Err(OcyError::NoSuchJob(job_id_completed)));
-//     assert_eq!(RedisManager::job_status(job_id_failed),    Err(OcyError::NoSuchJob(job_id_failed)));
-//     assert_eq!(RedisManager::job_status(job_id_cancelled), Err(OcyError::NoSuchJob(job_id_cancelled)));
-//     assert_eq!(RedisManager::job_status(job_id_timed_out), Err(OcyError::NoSuchJob(job_id_timed_out)));
-//     assert_eq!(RedisManager::job_status(job_id_queued),    Ok(job::Status::Queued));
-// }
+    assert_eq!(RedisManager::job_status(&mut conn, job_id_running).await,   Ok(job::Status::Running));
+    assert_eq!(RedisManager::job_status(&mut conn, job_id_completed).await, Err(OcyError::NoSuchJob(job_id_completed)));
+    assert_eq!(RedisManager::job_status(&mut conn, job_id_failed).await,    Err(OcyError::NoSuchJob(job_id_failed)));
+    assert_eq!(RedisManager::job_status(&mut conn, job_id_cancelled).await, Err(OcyError::NoSuchJob(job_id_cancelled)));
+    assert_eq!(RedisManager::job_status(&mut conn, job_id_timed_out).await, Err(OcyError::NoSuchJob(job_id_timed_out)));
+    assert_eq!(RedisManager::job_status(&mut conn, job_id_queued).await,    Ok(job::Status::Queued));
+}
 
 async fn create_job_in_all_states(
     conn: &mut Connection,
