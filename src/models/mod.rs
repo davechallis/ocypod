@@ -1,21 +1,21 @@
 //! Data structures used throughout the application.
 
+mod datetime;
+mod duration;
+mod error;
 pub mod job;
 pub mod queue;
 mod state;
-mod duration;
-mod datetime;
-mod error;
 
-pub use self::state::ApplicationState;
-pub use self::duration::Duration;
-pub use self::datetime::DateTime;
-pub use self::error::{OcyError, OcyResult};
+pub use datetime::DateTime;
+pub use duration::Duration;
+pub use error::{OcyError, OcyResult};
+pub use state::ApplicationState;
 
 use std::collections::HashMap;
 
-use redis::{self, RedisResult, FromRedisValue};
-use serde_derive::*;
+use redis::{self, FromRedisValue, RedisResult};
+use serde::Serialize;
 
 // TODO: add redis stats, e.g. memory used etc.
 #[derive(Debug, Eq, PartialEq, Serialize)]
@@ -26,7 +26,10 @@ pub struct ServerInfo {
 
 impl Default for ServerInfo {
     fn default() -> Self {
-        ServerInfo { queues: HashMap::new(), statistics: JobStats::default() }
+        ServerInfo {
+            queues: HashMap::new(),
+            statistics: JobStats::default(),
+        }
     }
 }
 
@@ -43,12 +46,12 @@ pub struct QueueInfo {
 impl QueueInfo {
     pub fn incr_status_count(&mut self, status: &job::Status) {
         match status {
-            job::Status::Queued    => self.queued += 1,
-            job::Status::Running   => self.running += 1,
-            job::Status::Failed    => self.failed += 1,
+            job::Status::Queued => self.queued += 1,
+            job::Status::Running => self.running += 1,
+            job::Status::Failed => self.failed += 1,
             job::Status::Completed => self.completed += 1,
             job::Status::Cancelled => self.cancelled += 1,
-            job::Status::TimedOut  => self.timed_out += 1,
+            job::Status::TimedOut => self.timed_out += 1,
         }
     }
 }
@@ -65,8 +68,14 @@ pub struct JobStats {
 
 impl FromRedisValue for JobStats {
     fn from_redis_value(v: &redis::Value) -> RedisResult<Self> {
-        let (created, completed, retried, failed, timed_out, cancelled):
-        (Option<u64>, Option<u64>, Option<u64>, Option<u64>, Option<u64>, Option<u64>) = redis::from_redis_value(v)?;
+        let (created, completed, retried, failed, timed_out, cancelled): (
+            Option<u64>,
+            Option<u64>,
+            Option<u64>,
+            Option<u64>,
+            Option<u64>,
+            Option<u64>,
+        ) = redis::from_redis_value(v)?;
 
         Ok(JobStats {
             total_jobs_created: created.unwrap_or_default(),

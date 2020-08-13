@@ -1,18 +1,6 @@
-//! Defines shared application state available to each HTTP worker thread.
+//! Defines server state, typically passed to HTTP handlers by Actix web as required.
 
-use actix::prelude::Addr;
-use crate::actors::application::ApplicationActor;
-use crate::config::Config;
-
-/// Shared state for an HTTP worker thread.
 pub struct ApplicationState {
-    /// Address of the `RedisActor` mailbox, used to send queue/job actions to.
-    pub redis_addr: Addr<ApplicationActor>,
-    pub config: Config,
-}
-
-impl ApplicationState {
-    pub fn new(redis_addr: Addr<ApplicationActor>, config: Config) -> Self {
-        ApplicationState { redis_addr, config }
-    }
+    pub redis_conn_manager: redis::aio::ConnectionManager,
+    pub config: crate::config::Config,
 }

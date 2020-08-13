@@ -1,5 +1,5 @@
-use redis::{self, FromRedisValue, RedisResult, from_redis_value};
-use serde_derive::*;
+use redis::{self, from_redis_value, FromRedisValue, RedisResult};
+use serde::{Deserialize, Serialize};
 
 use crate::models::Duration;
 
@@ -15,13 +15,24 @@ pub struct Settings {
 
 impl FromRedisValue for Settings {
     fn from_redis_value(v: &redis::Value) -> RedisResult<Self> {
-        let (timeout, heartbeat_timeout, expires_after, retries, retry_delays):
-        (Duration, Duration, Duration, u64, Option<String>) = from_redis_value(v)?;
+        let (timeout, heartbeat_timeout, expires_after, retries, retry_delays): (
+            Duration,
+            Duration,
+            Duration,
+            u64,
+            Option<String>,
+        ) = from_redis_value(v)?;
         let retry_delays = match retry_delays {
             Some(s) => serde_json::from_str(&s).unwrap(),
             None => Vec::new(),
         };
-        Ok(Self { timeout, heartbeat_timeout, expires_after, retries, retry_delays })
+        Ok(Self {
+            timeout,
+            heartbeat_timeout,
+            expires_after,
+            retries,
+            retry_delays,
+        })
     }
 }
 

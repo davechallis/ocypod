@@ -1,34 +1,26 @@
-use futures::Future;
 use log::error;
 
-use actix_web::{self, HttpResponse};
-use actix_web::web::{Path, Data};
+use actix_web::{web, HttpResponse, Responder};
 
-use crate::actors::application;
-use crate::models::{ApplicationState, OcyResult, OcyError};
+use crate::application::RedisManager;
+use crate::models::{ApplicationState, OcyError};
 
-#[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_pass_by_value))]
-pub fn tagged_jobs(
-    path: Path<String>,
-    data: Data<ApplicationState>,
-) -> impl Future<Item=HttpResponse, Error=()> {
+pub async fn tagged_jobs(
+    path: web::Path<String>,
+    data: web::Data<ApplicationState>,
+) -> impl Responder {
     let tag = path.into_inner();
-    data.redis_addr.send(application::GetTaggedJobs(tag))
-        .then(|res: Result<OcyResult<Vec<u64>>, actix::MailboxError>| {
-            let msg = match res {
-                Ok(msg) => msg,
-                Err(err) => Err(OcyError::Internal(err.to_string())),
-            };
-            match msg {
-                Ok(tags) => Ok(HttpResponse::Ok().json(tags)),
-                Err(OcyError::RedisConnection(err)) => {
-                    error!("Failed to read tag data: {}", err);
-                    Ok(HttpResponse::ServiceUnavailable().body(err.to_string()))
-                },
-                Err(err) => {
-                    error!("Failed to read tag data: {}", err);
-                    Ok(HttpResponse::InternalServerError().body(err.to_string()))
-                },
-            }
-        })
+    let mut conn = data.redis_conn_manager.clone();
+
+    match RedisManager::tagged_job_ids(&mut conn, &tag).await {
+        Ok(tags) => HttpResponse::Ok().json(tags),
+        Err(OcyError::RedisConnection(err)) => {
+            error!("Failed to read tag data: {}", err);
+            HttpResponse::ServiceUnavailable().body(err)
+        }
+        Err(err) => {
+            error!("Failed to read tag data: {}", err);
+            HttpResponse::InternalServerError().body(err)
+        }
+    }
 }

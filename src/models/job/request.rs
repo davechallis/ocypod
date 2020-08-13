@@ -1,7 +1,6 @@
-use serde_json;
-use serde_derive::*;
+use serde::Deserialize;
 
-use crate::models::{Duration, job::Status};
+use crate::models::{job::Status, Duration};
 
 /// Request to create a new job.
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -45,7 +44,7 @@ pub struct CreateRequest {
     ///
     /// E.g. with retries=5 and retry_delays=[10, 10, 20, 40], then the first two retries will be delayed by
     /// 10 seconds, the third by 20 seconds, and the fourth and fifth by 40 seconds.
-    pub retry_delays: Option<Vec<Duration>>
+    pub retry_delays: Option<Vec<Duration>>,
 }
 
 /// Request to update an existing job with new data.

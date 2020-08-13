@@ -2,11 +2,9 @@
 
 use std::{fmt, time};
 
+use redis::{self, FromRedisValue, RedisResult, RedisWrite, ToRedisArgs};
 use serde::de::{Deserialize, Deserializer, Error};
 use serde::ser::{Serialize, Serializer};
-use serde_json;
-use redis::{self, FromRedisValue, RedisResult, ToRedisArgs};
-use humantime;
 
 /// Duration to second resolution, thin wrapper around `time::Duration` allowing for custom
 /// (de)serialisation.
@@ -40,13 +38,19 @@ impl FromRedisValue for Duration {
 }
 
 impl ToRedisArgs for Duration {
-    fn write_redis_args(&self, out: &mut Vec<Vec<u8>>) {
+    fn write_redis_args<W>(&self, out: &mut W)
+    where
+        W: ?Sized + RedisWrite,
+    {
         self.0.as_secs().write_redis_args(out)
     }
 }
 
 impl<'a> ToRedisArgs for &'a Duration {
-    fn write_redis_args(&self, out: &mut Vec<Vec<u8>>) {
+    fn write_redis_args<W>(&self, out: &mut W)
+    where
+        W: ?Sized + RedisWrite,
+    {
         self.0.as_secs().write_redis_args(out)
     }
 }
@@ -60,7 +64,9 @@ impl Serialize for Duration {
 impl<'de> Deserialize<'de> for Duration {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Duration, D::Error> {
         let s: &str = Deserialize::deserialize(deserializer)?;
-        humantime::parse_duration(s).map(Duration).map_err(D::Error::custom)
+        humantime::parse_duration(s)
+            .map(Duration)
+            .map_err(D::Error::custom)
     }
 }
 
@@ -78,8 +84,8 @@ impl From<Duration> for serde_json::Value {
 
 #[cfg(test)]
 mod test {
-    use serde_json;
     use super::*;
+    use serde_json;
 
     #[test]
     fn is_zero() {
@@ -99,7 +105,10 @@ mod test {
         assert_eq!(serde_json::to_string(&dur).unwrap(), "\"2m 15s\"");
 
         let dur = Duration::from_secs(1246656);
-        assert_eq!(serde_json::to_string(&dur).unwrap(), "\"14days 10h 17m 36s\"");
+        assert_eq!(
+            serde_json::to_string(&dur).unwrap(),
+            "\"14days 10h 17m 36s\""
+        );
     }
 
     #[test]

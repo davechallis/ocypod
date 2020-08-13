@@ -1,21 +1,58 @@
 //! Configuration parsing.
 
-use std::path::Path;
-use std::fs;
 use std::default::Default;
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
 use std::str::FromStr;
 
-use toml;
-use serde::de::{Deserialize, Deserializer, Error};
-use serde_derive::*;
-use human_size;
-use log::debug;
+use log::{debug, warn};
+use serde::de::Deserializer;
+use serde::Deserialize;
+use structopt::StructOpt;
 
 use crate::models::Duration;
 
-// TODO: additional config
-// * keepalive
-// https://actix.rs/docs/server/
+/// Parsed command line options when the server application is started.
+#[derive(Debug, StructOpt)]
+#[structopt(name = "ocypod")]
+pub struct CliOpts {
+    #[structopt(parse(from_os_str), help = "Path to configuration file")]
+    config: Option<PathBuf>,
+}
+
+/// Parses configuration from either configuration path specified in command line arguments,
+/// or using default configuration if no configuration file was specified.
+pub fn parse_config_from_cli_args() -> Config {
+    let opts = CliOpts::from_args();
+    let conf = match opts.config {
+        Some(config_path) => match Config::from_file(&config_path) {
+            Ok(config) => config,
+            Err(msg) => {
+                eprintln!(
+                    "Failed to parse config file {}: {}",
+                    &config_path.display(),
+                    msg
+                );
+                std::process::exit(1);
+            }
+        },
+        None => {
+            warn!("No config file specified, using default config");
+            Config::default()
+        }
+    };
+
+    // validate config settings
+    if let Some(dur) = &conf.server.shutdown_timeout {
+        if dur.as_secs() > std::u16::MAX.into() {
+            eprintln!("Maximum shutdown_timeout is {} seconds", std::u16::MAX);
+            std::process::exit(1);
+        }
+    }
+
+    conf
+}
 
 /// Main application config, typically read from a `.toml` file.
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -51,6 +88,7 @@ impl Config {
         format!("{}:{}", self.server.host, self.server.port)
     }
 
+    /// Get the Redis URL to use for connecting to a Redis server.
     pub fn redis_url(&self) -> &str {
         &self.redis.url
     }
@@ -85,31 +123,46 @@ pub struct ServerConfig {
     /// Amount of time workers have to finish requests after server receives SIGTERM.
     pub shutdown_timeout: Option<Duration>,
 
+    /// Adds an artificial delay before returning to clients when a job is requested from an empty queue.
+    /// Used to rate limit clients that might be excessively hitting the server, e.g. in tight loops.
     pub next_job_delay: Option<Duration>,
 
+    /// Sets the application-wide log level.
     #[serde(deserialize_with = "deserialize_log_level")]
     pub log_level: log::Level,
 }
 
-fn deserialize_human_size<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<usize>, D::Error> {
+fn deserialize_human_size<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<usize>, D::Error> {
     let s: Option<&str> = Deserialize::deserialize(deserializer)?;
     Ok(match s {
         Some(s) => {
             let size: human_size::SpecificSize<human_size::Byte> = match s.parse() {
                 Ok(size) => size,
-                Err(_) => return Err(Error::custom(format!("Unable to parse size '{}'", s))),
+                Err(_) => {
+                    return Err(serde::de::Error::custom(format!(
+                        "Unable to parse size '{}'",
+                        s
+                    )))
+                }
             };
             Some(size.value() as usize)
-        },
+        }
         None => None,
     })
 }
 
-fn deserialize_log_level<'de, D: Deserializer<'de>>(deserializer: D) -> Result<log::Level, D::Error> {
+fn deserialize_log_level<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<log::Level, D::Error> {
     let s: &str = Deserialize::deserialize(deserializer)?;
     match log::Level::from_str(s) {
         Ok(level) => Ok(level),
-        Err(_) => Err(Error::custom(format!("Invalid log level: {}", s))),
+        Err(_) => Err(serde::de::Error::custom(format!(
+            "Invalid log level: {}",
+            s
+        ))),
     }
 }
 
@@ -136,16 +189,12 @@ impl Default for ServerConfig {
 pub struct RedisConfig {
     /// Redis URL to connect to. Defaults to "redis://127.0.0.1".
     pub url: String,
-
-    /// Number of connections to Redis that will be spawned. Defaults to number of CPUs if not specified.
-    pub threads: Option<usize>,
 }
 
 impl Default for RedisConfig {
     fn default() -> Self {
         RedisConfig {
             url: "redis://127.0.0.1".to_owned(),
-            threads: None,
         }
     }
 }

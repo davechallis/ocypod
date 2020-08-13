@@ -1,33 +1,44 @@
 //! Defines convenience interface to queue in Redis.
 
-use redis::{Commands, PipelineCommands, RedisResult};
-use log::{debug, info};
-
-use crate::models::{OcyError, OcyResult, queue, job};
-use crate::redis_utils::{transaction, vec_from_redis_pipe};
-use super::{keys, RedisJob, RedisTag};
 use std::collections::HashMap;
+
+use log::{debug, info};
+use redis::{aio::ConnectionLike, AsyncCommands, RedisResult};
+
+use super::{keys, RedisJob, RedisTag};
+use crate::models::{job, queue, OcyError, OcyResult};
+use crate::redis_utils::vec_from_redis_pipe;
+use crate::transaction_async;
 
 /// Interface to a queue in Redis. This consists of a list containing queued jobs, and a hash containing queue settings.
 ///
 /// Primarily used by RedisManager as a wrapper around some queue information.
-pub struct RedisQueue<'a> {
+#[derive(Debug)]
+pub struct RedisQueue {
+    /// Name of the queue.
     pub name: String,
-    conn: &'a redis::Connection,
+
+    /// Redis key of the queue.
     pub key: String,
+
+    /// Redis key used to store this queue's jobs under.
     pub jobs_key: String,
 }
 
-impl<'a> RedisQueue<'a> {
+impl RedisQueue {
     /// Get a new RedisQueue struct, ensuring its name is valid.
-    pub fn from_string<S: Into<String>>(name: S, conn: &'a redis::Connection) -> OcyResult<Self> {
+    pub fn from_string<S: Into<String>>(name: S) -> OcyResult<Self> {
         let name = name.into();
         if Self::is_valid_name(&name) {
             let key = Self::build_key(&name);
             let jobs_key = Self::build_jobs_key(&name);
-            Ok(Self { name, conn, key, jobs_key })
+            Ok(Self {
+                name,
+                key,
+                jobs_key,
+            })
         } else {
-            Err(OcyError::BadRequest("Invalid queue name, valid characters: a-zA-Z0-9_.-".to_owned()))
+            Err(OcyError::bad_request( "Invalid queue name, valid characters: a-zA-Z0-9_.-"))
         }
     }
 
@@ -41,35 +52,64 @@ impl<'a> RedisQueue<'a> {
     // TODO: this list could probably be expanded a bit
     /// Validate queue name, allowed chars for names are: [a-zA-Z0-9_.-].
     pub fn is_valid_name(name: &str) -> bool {
-        !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-')
+        !name.is_empty()
+            && name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-')
     }
 
     /// Create a new queue with given settings, or update settings for an existing queue.
     ///
     /// Returns true if a new queue was created, or false if an existing queue was updated.
-    pub fn create_or_update(&self, settings: &queue::Settings) -> OcyResult<bool> {
+    pub async fn create_or_update<C: ConnectionLike>(
+        &self,
+        conn: &mut C,
+        settings: &queue::Settings,
+    ) -> OcyResult<bool> {
         debug!("[{}] writing settings: {:?}", &self.key, settings);
 
         let mut pipeline = redis::pipe();
 
-        let pipe = pipeline.atomic()
+        let pipe = pipeline
+            .atomic()
             .hset(&self.key, queue::Field::Timeout, &settings.timeout)
-            .hset(&self.key, queue::Field::HeartbeatTimeout, &settings.heartbeat_timeout).ignore()
-            .hset(&self.key, queue::Field::ExpiresAfter, &settings.expires_after).ignore()
-            .hset(&self.key, queue::Field::Retries, settings.retries).ignore()
-            .sadd(keys::QUEUES_KEY, &self.name).ignore();
+            .hset(
+                &self.key,
+                queue::Field::HeartbeatTimeout,
+                &settings.heartbeat_timeout,
+            )
+            .ignore()
+            .hset(
+                &self.key,
+                queue::Field::ExpiresAfter,
+                &settings.expires_after,
+            )
+            .ignore()
+            .hset(&self.key, queue::Field::Retries, settings.retries)
+            .ignore()
+            .sadd(keys::QUEUES_KEY, &self.name)
+            .ignore();
 
         if settings.retry_delays.is_empty() {
             pipe.hdel(&self.key, queue::Field::RetryDelays).ignore();
         } else {
             let retry_delays_json: serde_json::Value = settings.retry_delays.as_slice().into();
-            pipe.hset(&self.key, queue::Field::RetryDelays, retry_delays_json.to_string()).ignore();
+            pipe.hset(
+                &self.key,
+                queue::Field::RetryDelays,
+                retry_delays_json.to_string(),
+            )
+            .ignore();
         }
 
-        let (is_new,): (bool,) = pipe.query(self.conn)?;
+        let (is_new,): (bool,) = pipe.query_async(conn).await?;
 
         // all fields are mandatory, so if 1st is updated, this is a new entry
-        info!("[{}] {}", &self.key, if is_new { "created" } else { "updated" });
+        info!(
+            "[{}] {}",
+            &self.key,
+            if is_new { "created" } else { "updated" }
+        );
         Ok(is_new)
     }
 
@@ -78,52 +118,65 @@ impl<'a> RedisQueue<'a> {
     /// Deletes any jobs currently in the queue, but won't affected any running/completed jobs.
     ///
     /// Returns true if a queue was deleted, false otherwise.
-    pub fn delete(&self) -> OcyResult<bool> {
+    pub async fn delete<C: ConnectionLike + Send>(&self, conn: &mut C) -> OcyResult<bool> {
         debug!("Deleting queue '{}'", self.name);
-        let (queue_deleted, num_jobs_deleted): (bool, usize) = transaction(self.conn, &[&self.jobs_key], |pipe| {
-            // if queue has already been deleted, nothing to do
-            if !self.exists()? {
-                return Ok(Some((false, 0)));
-            }
+        let (queue_deleted, num_jobs_deleted): (bool, usize) =
+            transaction_async!(conn, &[&self.jobs_key], {
+                // if queue has already been deleted, nothing to do
+                if !self.exists(conn).await? {
+                    Some((false, 0))
+                } else {
+                    let mut keys_to_del: Vec<String> =
+                        vec![self.key.to_owned(), self.jobs_key.to_owned()];
 
-            let mut keys_to_del: Vec<String> = vec![self.key.to_owned(), self.jobs_key.to_owned()];
+                    // fetch all tags for all jobs to delete in separate non-atomic/transactional pipeline
+                    let mut tag_pipeline = redis::pipe();
+                    let tag_pipe = &mut tag_pipeline;
 
-            // fetch all tags for all jobs to delete in separate non-atomic/transactional pipeline
-            let mut tag_pipeline = redis::pipe();
-            let tag_pipe = &mut tag_pipeline;
-
-            let job_ids: Vec<u64> = self.conn.lrange(&self.jobs_key, 0, -1)?;
-            for job_id in &job_ids {
-                let job_key = RedisJob::build_key(*job_id);
-                tag_pipe.hget(&job_key, &[job::Field::Id, job::Field::Tags]);
-                keys_to_del.push(job_key);
-            }
-
-            let tagged_jobs: Vec<(Option<u64>, Option<String>)> = vec_from_redis_pipe(tag_pipe, self.conn)?;
-            for (job_id, tags) in tagged_jobs {
-                if let (Some(job_id), Some(tags)) = (job_id, tags) {
-                    for tag in serde_json::from_str::<Vec<&str>>(&tags).unwrap() {
-                        pipe.srem(RedisTag::build_key(tag), job_id);
+                    let job_ids: Vec<u64> = conn.lrange(&self.jobs_key, 0, -1).await?;
+                    for job_id in &job_ids {
+                        let job_key = RedisJob::build_key(*job_id);
+                        tag_pipe.hget(&job_key, &[job::Field::Id, job::Field::Tags]);
+                        keys_to_del.push(job_key);
                     }
-                }
-            }
 
-            let result: Option<()> = pipe
-                .del(keys_to_del)
-                .srem(keys::QUEUES_KEY, &self.name)
-                .query(self.conn)?;
-            Ok(result.map(|_| (true, job_ids.len())))
-        })?;
+                    let mut pipe = redis::pipe();
+                    let pipe_ref = pipe.atomic();
+
+                    let tagged_jobs: Vec<(Option<u64>, Option<String>)> =
+                        vec_from_redis_pipe(conn, tag_pipe).await?;
+                    for (job_id, tags) in tagged_jobs {
+                        if let (Some(job_id), Some(tags)) = (job_id, tags) {
+                            for tag in serde_json::from_str::<Vec<&str>>(&tags).unwrap() {
+                                pipe_ref.srem(RedisTag::build_key(tag), job_id);
+                            }
+                        }
+                    }
+
+                    let result: Option<()> = pipe_ref
+                        .del(keys_to_del)
+                        .srem(keys::QUEUES_KEY, &self.name)
+                        .query_async(conn)
+                        .await?;
+                    result.map(|_| (true, job_ids.len()))
+                }
+            });
 
         if queue_deleted {
-            info!("[{}] deleted ({} queued jobs deleted)", &self.key, num_jobs_deleted);
+            info!(
+                "[{}] deleted ({} queued jobs deleted)",
+                &self.key, num_jobs_deleted
+            );
             Ok(true)
         } else {
             Ok(false)
         }
     }
 
-    pub fn job_ids(&self) -> OcyResult<HashMap<job::Status, Vec<u64>>> {
+    pub async fn job_ids<C: ConnectionLike + Send>(
+        &self,
+        conn: &mut C,
+    ) -> OcyResult<HashMap<job::Status, Vec<u64>>> {
         let mut pipeline = redis::pipe();
         let pipe = &mut pipeline;
         let mut job_ids = HashMap::new();
@@ -131,25 +184,36 @@ impl<'a> RedisQueue<'a> {
             job_ids.insert(status.clone(), Vec::new());
         }
 
-        for queue_key in &[&self.jobs_key, keys::FAILED_KEY, keys::ENDED_KEY, keys::RUNNING_KEY] {
-            for job_id in self.conn.lrange::<_, Vec<u64>>(*queue_key, 0, -1)? {
-                pipe.hget(RedisJob::new(job_id, self.conn).key(), &[job::Field::Id, job::Field::Queue, job::Field::Status]);
+        for queue_key in &[
+            &self.jobs_key,
+            keys::FAILED_KEY,
+            keys::ENDED_KEY,
+            keys::RUNNING_KEY,
+        ] {
+            for job_id in conn.lrange::<_, Vec<u64>>(*queue_key, 0, -1).await? {
+                pipe.hget(
+                    RedisJob::new(job_id).key(),
+                    &[job::Field::Id, job::Field::Queue, job::Field::Status],
+                );
             }
         }
 
-        for (job_id, queue_name, status) in vec_from_redis_pipe::<(Option<u64>, Option<String>, Option<job::Status>)>(pipe, self.conn)? {
+        for (job_id, queue_name, status) in
+            vec_from_redis_pipe::<C, (Option<u64>, Option<String>, Option<job::Status>)>(conn, pipe)
+                .await?
+        {
             if queue_name.as_ref() != Some(&self.name) {
-                continue
+                continue;
             }
 
             let status = match status {
                 Some(status) => status,
-                None         => continue,
+                None => continue,
             };
 
             let job_id = match job_id {
                 Some(job_id) => job_id,
-                None         => continue,
+                None => continue,
             };
 
             job_ids.get_mut(&status).unwrap().push(job_id);
@@ -159,14 +223,15 @@ impl<'a> RedisQueue<'a> {
     }
 
     /// Get number of jobs currently queued.
-    pub fn size(&self) -> OcyResult<u64> {
-        let conn = self.conn;
-        let (exists, size): (bool, u64) =
-            redis::transaction(conn, &[&self.key, &self.jobs_key], |pipe| {
-                pipe.exists(&self.key)    // check queue settings exist
-                    .llen(&self.jobs_key) // check length of queued jobs
-                    .query(conn)
-            })?;
+    pub async fn size<C: ConnectionLike>(&self, conn: &mut C) -> OcyResult<u64> {
+        let (exists, size): (bool, u64) = transaction_async!(conn, &[&self.key, &self.jobs_key], {
+            redis::pipe()
+                .atomic()
+                .exists(&self.key) // check queue settings exist
+                .llen(&self.jobs_key) // check length of queued jobs
+                .query_async(conn)
+                .await?
+        });
 
         if exists {
             Ok(size)
@@ -176,24 +241,34 @@ impl<'a> RedisQueue<'a> {
     }
 
     /// Get this queue's settings.
-    pub fn settings(&self) -> OcyResult<queue::Settings> {
-        Ok(self.conn.hget(&self.key, &[queue::Field::Timeout,
-            queue::Field::HeartbeatTimeout,
-            queue::Field::ExpiresAfter,
-            queue::Field::Retries,
-            queue::Field::RetryDelays])?)
+    pub async fn settings<C: ConnectionLike + Send>(
+        &self,
+        conn: &mut C,
+    ) -> OcyResult<queue::Settings> {
+        Ok(conn
+            .hget(
+                &self.key,
+                &[
+                    queue::Field::Timeout,
+                    queue::Field::HeartbeatTimeout,
+                    queue::Field::ExpiresAfter,
+                    queue::Field::Retries,
+                    queue::Field::RetryDelays,
+                ],
+            )
+            .await?)
     }
 
     /// Check whether this queue exists in Redis or not.
-    pub fn exists(&self) -> RedisResult<bool> {
-        self.conn.exists(&self.key)
+    pub async fn exists<C: ConnectionLike + Send>(&self, conn: &mut C) -> RedisResult<bool> {
+        conn.exists(&self.key).await
     }
 
     /// Return either this queue or an error if it doesn't exist.
     ///
     /// Convenience function for chaining function calls on queues.
-    pub fn ensure_exists(self) -> OcyResult<Self> {
-        if self.exists()? {
+    pub async fn ensure_exists<C: ConnectionLike + Send>(self, conn: &mut C) -> OcyResult<Self> {
+        if self.exists(conn).await? {
             Ok(self)
         } else {
             Err(OcyError::NoSuchQueue(self.name))
@@ -210,7 +285,6 @@ impl<'a> RedisQueue<'a> {
         format!("{}{}{}", keys::QUEUE_PREFIX, name, keys::QUEUE_JOBS_SUFFIX)
     }
 }
-
 
 #[cfg(test)]
 mod test {

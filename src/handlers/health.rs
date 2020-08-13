@@ -1,19 +1,15 @@
-//! HTTP handlers for the `/health` endpoint.
+//! Defines handlers for health check HTTP endpoints.
 
-use futures::Future;
-use actix_web::{self, HttpResponse};
-use actix_web::web::Data;
-use serde_derive::*;
-use log::error;
+use actix_web::{web, HttpResponse, Responder};
+use serde::Serialize;
 
-use crate::actors::application;
 use crate::models::ApplicationState;
 
 #[derive(Serialize)]
-#[serde(rename_all="lowercase")]
+#[serde(rename_all = "lowercase")]
 enum HealthStatus {
-    HEALTHY,
-    UNHEALTHY,
+    Healthy,
+    Unhealthy,
 }
 
 #[derive(Serialize)]
@@ -26,26 +22,35 @@ struct Health {
 
 impl Health {
     fn new_healthy() -> Self {
-        Health { status: HealthStatus::HEALTHY, error: None }
+        Health {
+            status: HealthStatus::Healthy,
+            error: None,
+        }
     }
 
     fn new_from_error<S: Into<String>>(err: S) -> Self {
-        Health { status: HealthStatus::UNHEALTHY, error: Some(err.into()) }
+        Health {
+            status: HealthStatus::Unhealthy,
+            error: Some(err.into()),
+        }
     }
 }
 
-/// Handle `GET /health` requests to get a JSON list of all existing queues.
-pub fn index(data: Data<ApplicationState>) -> impl Future<Item=HttpResponse, Error=()> {
-    data.redis_addr.send(application::CheckHealth)
-        .then(|res| {
-            match res {
-                Ok(_)    => Ok(HttpResponse::Ok().json(Health::new_healthy())),
-                Err(err) => {
-                    error!("Health check failed: {}", err);
-                    Ok(HttpResponse::Ok().json(Health::new_from_error(err.to_string())))
-                },
-            }
-        })
+pub async fn index(data: web::Data<ApplicationState>) -> impl Responder {
+    let mut conn = data.redis_conn_manager.clone();
+
+    let reply: String = match redis::cmd("PING").query_async(&mut conn).await {
+        Ok(s) => s,
+        Err(err) => return HttpResponse::Ok().json(Health::new_from_error(err.to_string())),
+    };
+
+    match reply.as_ref() {
+        "PONG" => HttpResponse::Ok().json(Health::new_healthy()),
+        other => HttpResponse::Ok().json(Health::new_from_error(format!(
+            "unexpected PING response from Redis: {}",
+            other
+        ))),
+    }
 }
 
 #[cfg(test)]
@@ -56,9 +61,15 @@ mod test {
     #[test]
     fn serialisation() {
         let h = Health::new_healthy();
-        assert_eq!(serde_json::to_string(&h).unwrap(), "{\"status\":\"healthy\"}");
+        assert_eq!(
+            serde_json::to_string(&h).unwrap(),
+            "{\"status\":\"healthy\"}"
+        );
 
         let h = Health::new_from_error("message");
-        assert_eq!(serde_json::to_string(&h).unwrap(), "{\"status\":\"unhealthy\",\"error\":\"message\"}");
+        assert_eq!(
+            serde_json::to_string(&h).unwrap(),
+            "{\"status\":\"unhealthy\",\"error\":\"message\"}"
+        );
     }
 }

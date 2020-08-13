@@ -1,12 +1,11 @@
 //! Handlers for getting general information about the Ocypod server as a whole.
 
-use futures::Future;
-use actix_web::{self, HttpRequest, HttpResponse};
-use actix_web::web::Data;
+use actix_web::{web, HttpResponse, Responder};
 use log::error;
 
-use crate::actors::application;
-use crate::models::{ApplicationState, OcyError};
+use crate::application::RedisManager;
+use crate::models::ApplicationState;
+use crate::models::OcyError;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -15,28 +14,23 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// # Returns
 ///
 /// * 200 - JSON containing summary of server information
-pub fn index(data: Data<ApplicationState>) -> impl Future<Item=HttpResponse, Error=()> {
-    data.redis_addr.send(application::GetInfo)
-        .then(|res| {
-            let msg = match res {
-                Ok(msg) => msg,
-                Err(err) => Err(OcyError::Internal(err.to_string())),
-            };
-            match msg {
-                Ok(summary) => Ok(HttpResponse::Ok().json(summary)),
-                Err(OcyError::RedisConnection(err)) => {
-                    error!("Failed to fetch summary data: {}", err);
-                    Ok(HttpResponse::ServiceUnavailable().body(err.to_string()))
-                },
-                Err(err)    => {
-                    error!("Failed to fetch summary data: {}", err);
-                    Ok(HttpResponse::InternalServerError().body(err.to_string()))
-                },
-            }
-        })
+pub async fn index(data: web::Data<ApplicationState>) -> impl Responder {
+    let mut conn = data.redis_conn_manager.clone();
+
+    match RedisManager::server_info(&mut conn).await {
+        Ok(info) => HttpResponse::Ok().json(info),
+        Err(OcyError::RedisConnection(err)) => {
+            error!("Failed to fetch summary data: {}", err);
+            HttpResponse::ServiceUnavailable().body(err)
+        }
+        Err(err) => {
+            error!("Failed to fetch summary data: {}", err);
+            HttpResponse::InternalServerError().body(err)
+        }
+    }
 }
 
-/// Handles `GET /info/version` requests.
-pub fn version(_: HttpRequest) -> HttpResponse {
+/// Handles `GET /info/version` requests. This returns the version number of this server.
+pub async fn version() -> impl Responder {
     HttpResponse::Ok().json(VERSION)
 }

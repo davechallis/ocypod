@@ -49,10 +49,8 @@ Configuration for connectivity to the Redis server used by Ocypod. Uses
 Fields:
 
 * `url` (string) - [Redis connection URI](https://www.iana.org/assignments/uri-schemes/prov/redis) (default: "redis://127.0.0.1")
-* `threads` (int) - number of workers handling connections to Redis (default: <number of CPUs>)
 
 Example:
 
     [redis]
     url = "redis://:my_password@example.com:6379/my_db"
-    threads = 1

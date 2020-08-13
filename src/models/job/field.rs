@@ -1,8 +1,8 @@
 use std::fmt;
 use std::str::FromStr;
 
-use redis::{self, FromRedisValue, ToRedisArgs};
-use serde_derive::*;
+use redis::{self, FromRedisValue, RedisWrite, ToRedisArgs};
+use serde::Serialize;
 
 const ID_FIELD: &str = "id";
 const QUEUE_FIELD: &str = "queue";
@@ -22,10 +22,9 @@ const RETRIES_ATTEMPTED_FIELD: &str = "retries_attempted";
 const RETRY_DELAYS_FIELD: &str = "retry_delays";
 const ENDED_FIELD: &str = "ended";
 
-
 /// Represents a job field that's stored in a Redis hash.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
-#[serde(rename_all="snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum Field {
     Id,
     Queue,
@@ -81,23 +80,23 @@ impl fmt::Display for Field {
 impl AsRef<str> for Field {
     fn as_ref(&self) -> &str {
         match self {
-            Field::Id               => ID_FIELD,
-            Field::Queue            => QUEUE_FIELD,
-            Field::Status           => STATUS_FIELD,
-            Field::Tags             => TAGS_FIELD,
-            Field::CreatedAt        => CREATED_AT_FIELD,
-            Field::StartedAt        => STARTED_AT_FIELD,
-            Field::EndedAt          => ENDED_AT_FIELD,
-            Field::LastHeartbeat    => LAST_HEARTBEAT_FIELD,
-            Field::Input            => INPUT_FIELD,
-            Field::Output           => OUTPUT_FIELD,
-            Field::Timeout          => TIMEOUT_FIELD,
+            Field::Id => ID_FIELD,
+            Field::Queue => QUEUE_FIELD,
+            Field::Status => STATUS_FIELD,
+            Field::Tags => TAGS_FIELD,
+            Field::CreatedAt => CREATED_AT_FIELD,
+            Field::StartedAt => STARTED_AT_FIELD,
+            Field::EndedAt => ENDED_AT_FIELD,
+            Field::LastHeartbeat => LAST_HEARTBEAT_FIELD,
+            Field::Input => INPUT_FIELD,
+            Field::Output => OUTPUT_FIELD,
+            Field::Timeout => TIMEOUT_FIELD,
             Field::HeartbeatTimeout => HEARTBEAT_TIMEOUT_FIELD,
-            Field::ExpiresAfter     => EXPIRES_AFTER_FIELD,
-            Field::Retries          => RETRIES_FIELD,
+            Field::ExpiresAfter => EXPIRES_AFTER_FIELD,
+            Field::Retries => RETRIES_FIELD,
             Field::RetriesAttempted => RETRIES_ATTEMPTED_FIELD,
-            Field::RetryDelays      => RETRY_DELAYS_FIELD,
-            Field::Ended            => ENDED_FIELD,
+            Field::RetryDelays => RETRY_DELAYS_FIELD,
+            Field::Ended => ENDED_FIELD,
         }
     }
 }
@@ -107,30 +106,30 @@ impl FromStr for Field {
 
     fn from_str(s: &str) -> Result<Field, ()> {
         match s {
-            ID_FIELD                => Ok(Field::Id),
-            QUEUE_FIELD             => Ok(Field::Queue),
-            STATUS_FIELD            => Ok(Field::Status),
-            TAGS_FIELD              => Ok(Field::Tags),
-            CREATED_AT_FIELD        => Ok(Field::CreatedAt),
-            STARTED_AT_FIELD        => Ok(Field::StartedAt),
-            ENDED_AT_FIELD          => Ok(Field::EndedAt),
-            LAST_HEARTBEAT_FIELD    => Ok(Field::LastHeartbeat),
-            INPUT_FIELD             => Ok(Field::Input),
-            OUTPUT_FIELD            => Ok(Field::Output),
-            TIMEOUT_FIELD           => Ok(Field::Timeout),
+            ID_FIELD => Ok(Field::Id),
+            QUEUE_FIELD => Ok(Field::Queue),
+            STATUS_FIELD => Ok(Field::Status),
+            TAGS_FIELD => Ok(Field::Tags),
+            CREATED_AT_FIELD => Ok(Field::CreatedAt),
+            STARTED_AT_FIELD => Ok(Field::StartedAt),
+            ENDED_AT_FIELD => Ok(Field::EndedAt),
+            LAST_HEARTBEAT_FIELD => Ok(Field::LastHeartbeat),
+            INPUT_FIELD => Ok(Field::Input),
+            OUTPUT_FIELD => Ok(Field::Output),
+            TIMEOUT_FIELD => Ok(Field::Timeout),
             HEARTBEAT_TIMEOUT_FIELD => Ok(Field::HeartbeatTimeout),
-            EXPIRES_AFTER_FIELD     => Ok(Field::ExpiresAfter),
-            RETRIES_FIELD           => Ok(Field::Retries),
+            EXPIRES_AFTER_FIELD => Ok(Field::ExpiresAfter),
+            RETRIES_FIELD => Ok(Field::Retries),
             RETRIES_ATTEMPTED_FIELD => Ok(Field::RetriesAttempted),
-            RETRY_DELAYS_FIELD      => Ok(Field::RetryDelays),
-            ENDED_FIELD             => Ok(Field::Ended),
+            RETRY_DELAYS_FIELD => Ok(Field::RetryDelays),
+            ENDED_FIELD => Ok(Field::Ended),
             _ => Err(()),
         }
     }
 }
 
 impl ToRedisArgs for Field {
-    fn write_redis_args(&self, out: &mut Vec<Vec<u8>>) {
+    fn write_redis_args<W: ?Sized + RedisWrite>(&self, out: &mut W) {
         self.as_ref().write_redis_args(out)
     }
 }
