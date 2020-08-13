@@ -30,11 +30,32 @@ pub enum OcyError {
 
     /// Internal application error, e.g. actor mailbox full.
     Internal(String),
+
+    /// Parsing of some data structure failed. Typically used when parsing JSON.
+    ParseError(String),
+}
+
+impl OcyError {
+    /// Construct a new OcyError::Conflict with given message.
+    pub fn conflict<S: Into<String>>(msg: S) -> Self {
+        OcyError::Conflict(msg.into())
+    }
+
+    /// Construct a new OcyError::BadRequest with given message.
+    pub fn bad_request<S: Into<String>>(msg: S) -> Self {
+        OcyError::BadRequest(msg.into())
+    }
 }
 
 impl From<RedisError> for OcyError {
     fn from(err: RedisError) -> Self {
         OcyError::Redis(err)
+    }
+}
+
+impl From<serde_json::Error> for OcyError {
+    fn from(err: serde_json::Error) -> Self {
+        OcyError::ParseError(err.to_string())
     }
 }
 
@@ -51,6 +72,7 @@ impl fmt::Display for OcyError {
             OcyError::RedisConnection(msg) => write!(f, "Failed to connect to Redis: {}", msg),
             OcyError::NoSuchQueue(queue) => write!(f, "Queue '{}' does not exist", queue),
             OcyError::NoSuchJob(job_id) => write!(f, "Job with ID {} does not exist", job_id),
+            OcyError::ParseError(msg) => write!(f, "Parse error: {}", msg),
             OcyError::BadRequest(msg) | OcyError::Conflict(msg) | OcyError::Internal(msg) => {
                 write!(f, "{}", msg)
             }
@@ -62,12 +84,7 @@ impl Error for OcyError {
     fn cause(&self) -> Option<&dyn Error> {
         match self {
             OcyError::Redis(err) => err.source(),
-            OcyError::RedisConnection(_) => None,
-            OcyError::NoSuchQueue(_) => None,
-            OcyError::NoSuchJob(_) => None,
-            OcyError::BadRequest(_) => None,
-            OcyError::Conflict(_) => None,
-            OcyError::Internal(_) => None,
+            _ => None,
         }
     }
 }

@@ -23,6 +23,7 @@ pub async fn vec_from_redis_pipe<C: ConnectionLike, T: FromRedisValue>(
     Ok(results)
 }
 
+/// Simplifies async Redis transactions.
 #[macro_export]
 macro_rules! transaction_async {
     ($conn:expr, $keys:expr, $body:expr) => {

@@ -6,7 +6,6 @@ use log::error;
 use crate::application::RedisManager;
 use crate::models::ApplicationState;
 use crate::models::OcyError;
-//use crate::models::{ApplicationState, OcyError};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -26,7 +25,7 @@ pub async fn index(data: web::Data<ApplicationState>) -> impl Responder {
         }
         Err(err) => {
             error!("Failed to fetch summary data: {}", err);
-            HttpResponse::InternalServerError().body(err.to_string())
+            HttpResponse::InternalServerError().body(err)
         }
     }
 }

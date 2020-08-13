@@ -31,7 +31,7 @@ pub fn parse_config_from_cli_args() -> Config {
             Err(msg) => {
                 eprintln!(
                     "Failed to parse config file {}: {}",
-                    &config_path.to_string_lossy(),
+                    &config_path.display(),
                     msg
                 );
                 std::process::exit(1);
@@ -189,16 +189,12 @@ impl Default for ServerConfig {
 pub struct RedisConfig {
     /// Redis URL to connect to. Defaults to "redis://127.0.0.1".
     pub url: String,
-
-    /// Number of connections to Redis that will be spawned. Defaults to number of CPUs if not specified.
-    pub threads: Option<usize>,
 }
 
 impl Default for RedisConfig {
     fn default() -> Self {
         RedisConfig {
             url: "redis://127.0.0.1".to_owned(),
-            threads: None,
         }
     }
 }

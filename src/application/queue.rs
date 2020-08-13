@@ -1,5 +1,7 @@
 //! Defines convenience interface to queue in Redis.
 
+use std::collections::HashMap;
+
 use log::{debug, info};
 use redis::{aio::ConnectionLike, AsyncCommands, RedisResult};
 
@@ -7,14 +9,19 @@ use super::{keys, RedisJob, RedisTag};
 use crate::models::{job, queue, OcyError, OcyResult};
 use crate::redis_utils::vec_from_redis_pipe;
 use crate::transaction_async;
-use std::collections::HashMap;
 
 /// Interface to a queue in Redis. This consists of a list containing queued jobs, and a hash containing queue settings.
 ///
 /// Primarily used by RedisManager as a wrapper around some queue information.
+#[derive(Debug)]
 pub struct RedisQueue {
+    /// Name of the queue.
     pub name: String,
+
+    /// Redis key of the queue.
     pub key: String,
+
+    /// Redis key used to store this queue's jobs under.
     pub jobs_key: String,
 }
 
@@ -31,9 +38,7 @@ impl RedisQueue {
                 jobs_key,
             })
         } else {
-            Err(OcyError::BadRequest(
-                "Invalid queue name, valid characters: a-zA-Z0-9_.-".to_owned(),
-            ))
+            Err(OcyError::bad_request( "Invalid queue name, valid characters: a-zA-Z0-9_.-"))
         }
     }
 

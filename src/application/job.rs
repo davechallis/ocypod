@@ -8,8 +8,13 @@ use crate::models::{job, DateTime, OcyError, OcyResult};
 use crate::transaction_async;
 
 /// Convenient wrapper struct for combing a job ID plus a connection.
+#[derive(Debug)]
 pub struct RedisJob {
+    /// ID of the job.
     pub id: u64,
+
+    /// Redis key used to store the job under. Can be derived from the ID, but stored separately
+    /// avoid having to regenerate it each time it's needed.
     pub key: String,
 }
 
@@ -119,9 +124,6 @@ impl RedisJob {
             }
 
             pipe.query_async(conn).await?
-            //    Ok(r) => Ok(r),
-            //   Err(err) => return Err(OcyError::Redis(err))
-            //}
         });
         Ok(())
     }
@@ -273,7 +275,8 @@ impl RedisJob {
 
         if exists {
             match output {
-                Some(ref s) => Ok(serde_json::from_str(s).unwrap()),
+                // JSON parse error should never happen unless someone manually writes data to Redis outside of Ocypod.
+                Some(ref s) => Ok(serde_json::from_str(s)?),
                 None => Ok(serde_json::Value::Null),
             }
         } else {
@@ -305,9 +308,7 @@ impl RedisJob {
     ) -> OcyResult<&'b mut Pipeline> {
         match self.status(conn).await? {
             job::Status::Running => Ok(pipe.hset(&self.key, job::Field::Output, value.to_string())),
-            _ => Err(OcyError::Conflict(
-                "Can only set output for running jobs".to_string(),
-            )),
+            _ => Err(OcyError::conflict("Can only set output for running jobs")),
         }
     }
 
@@ -374,10 +375,7 @@ impl RedisJob {
             (job::Status::Failed, job::Status::Queued) => self.requeue(conn, pipe, false).await?,
             (job::Status::TimedOut, job::Status::Queued) => self.requeue(conn, pipe, false).await?,
             (from, to) => {
-                return Err(OcyError::Conflict(format!(
-                    "Cannot change status from {} to {}",
-                    from, to
-                )))
+                return Err(OcyError::conflict(format!("Cannot change status from {} to {}", from, to)))
             }
         })
     }
@@ -387,10 +385,7 @@ impl RedisJob {
         let _: () = transaction_async!(conn, &[&self.key], {
             // only existing/running jobs can have heartbeat updated
             if self.status(conn).await? != job::Status::Running {
-                return Err(OcyError::Conflict(format!(
-                    "Cannot heartbeat job {}, job is not running",
-                    self.id
-                )));
+                return Err(OcyError::conflict(format!("Cannot heartbeat job {}, job is not running", self.id)));
             }
 
             redis::pipe()

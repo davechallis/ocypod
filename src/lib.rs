@@ -1,6 +1,5 @@
 //! Job queue system designed for long running tasks.
 
-pub mod application;
 #[deny(
     missing_docs,
     missing_debug_implementations,
@@ -12,6 +11,8 @@ pub mod application;
     unused_import_braces,
     unused_qualifications
 )]
+
+pub mod application;
 pub mod config;
 pub mod handlers;
 pub mod models;

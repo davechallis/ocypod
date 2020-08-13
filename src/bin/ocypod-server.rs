@@ -14,7 +14,7 @@ async fn main() -> std::io::Result<()> {
             "ocypod={},ocypod-server={}",
             config.server.log_level, config.server.log_level
         );
-        pretty_env_logger::formatted_builder()
+        env_logger::Builder::new()
             .parse_filters(&log_settings)
             .format_module_path(false)
             .init();

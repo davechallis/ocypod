@@ -19,9 +19,7 @@ impl RedisTag {
                 key: Self::build_key(tag),
             })
         } else {
-            Err(OcyError::BadRequest(
-                "Invalid tag name, valid characters: a-zA-Z0-9_.-".to_owned(),
-            ))
+            Err(OcyError::bad_request("Invalid tag name, valid characters: a-zA-Z0-9_.-"))
         }
     }
 

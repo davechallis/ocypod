@@ -1,9 +1,9 @@
 //! HTTP handlers for `/job/*` endpoints.
 
-use log::error;
-use serde::Deserialize;
 use std::str::FromStr;
 
+use log::error;
+use serde::Deserialize;
 use actix_web::{web, HttpResponse, Responder};
 
 use crate::application::RedisManager;

@@ -23,7 +23,7 @@ chrono = { version = "0.4", features = ["serde"] }
 redis = { version = "0.17", features = ["connection-manager"] }
 log = "0.4"
 humantime = "2.0"
-pretty_env_logger = "0.4"
+env_logger = "0.7"
 actix-web = "2.0"
 actix-rt = "1.0"
 

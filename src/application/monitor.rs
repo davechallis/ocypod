@@ -6,12 +6,14 @@ use log::{error, info};
 
 use crate::config::ServerConfig;
 
+/// Start all background tasks that perform monitoring/cleanup.
 pub fn start_monitors(conn: redis::aio::ConnectionManager, config: &ServerConfig) {
     start_timeout_monitor(conn.clone(), config.timeout_check_interval.0);
     start_retry_monitor(conn.clone(), config.retry_check_interval.0);
     start_expiry_monitor(conn, config.expiry_check_interval.0);
 }
 
+/// Start periodic background task that checks jobs for timeouts.
 fn start_timeout_monitor(conn: redis::aio::ConnectionManager, check_interval: Duration) {
     info!(
         "Checking job timeouts every {}",
@@ -29,6 +31,7 @@ fn start_timeout_monitor(conn: redis::aio::ConnectionManager, check_interval: Du
     })
 }
 
+/// Start periodic background task that checks for jobs that need retrying.
 fn start_retry_monitor(conn: redis::aio::ConnectionManager, check_interval: Duration) {
     info!(
         "Checking job retries every {}",
@@ -46,6 +49,7 @@ fn start_retry_monitor(conn: redis::aio::ConnectionManager, check_interval: Dura
     })
 }
 
+/// Start periodic background that checks for expired jobs and cleans them up.
 fn start_expiry_monitor(conn: redis::aio::ConnectionManager, check_interval: Duration) {
     info!(
         "Checking job expiry every {}",

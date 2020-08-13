@@ -13,10 +13,13 @@ use crate::models::{job, queue, DateTime, JobStats, OcyError, OcyResult, QueueIn
 use crate::redis_utils::vec_from_redis_pipe;
 use crate::transaction_async;
 
+// TODO: now that RedisManager this has no state, should its methods just be moved to module functions?
+
 /// Manages queues and jobs within Redis. Contains main public functions that are called by HTTP services.
 ///
 /// Internally, uses RedisJob and RedisQueue structs as convenient wrappers around interacting with jobs/queues.
-pub struct RedisManager {}
+#[derive(Copy, Clone, Debug)]
+pub struct RedisManager;
 
 impl RedisManager {
     /// Create or update a queue in Redis with given name and settings.
@@ -236,6 +239,7 @@ impl RedisManager {
         Ok(conn.llen(keys::ENDED_KEY).await?)
     }
 
+    /// Get a list of job IDs that are currently in a given queue.
     pub async fn queue_job_ids<C: ConnectionLike + Send>(
         conn: &mut C,
         queue_name: &str,
@@ -346,10 +350,9 @@ impl RedisManager {
         let mut iter: redis::AsyncIter<String> = conn.scan_match::<_, String>("queue:*").await?;
         let mut queues = Vec::new();
         while let Some(queue_key) = iter.next_item().await {
-            if queue_key.ends_with(":jobs") {
-                continue;
+            if !queue_key.ends_with(":jobs") {
+                queues.push(queue_key);
             }
-            queues.push(queue_key);
         }
 
         for queue_key in queues {

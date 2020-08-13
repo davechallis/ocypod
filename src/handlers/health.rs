@@ -1,6 +1,9 @@
-use crate::models::ApplicationState;
+//! Defines handlers for health check HTTP endpoints.
+
 use actix_web::{web, HttpResponse, Responder};
 use serde::Serialize;
+
+use crate::models::ApplicationState;
 
 #[derive(Serialize)]
 #[serde(rename_all = "lowercase")]
