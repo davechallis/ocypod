@@ -1,3 +1,11 @@
+# 0.5.0 (unreleased)
+
+* Large internal refactoring to move to using async/await throughout.
+* Migrated from using Actix web 1.0 to 2.0.
+* Moved to using async Redis connection, and connection manager.
+* Removed use of Actix actors.
+* Redis threads configuration option removed.
+
 # 0.4.0 (2019-07-05)
 
 * Added `/queue/{name}/job_ids` endpoint to return job IDs by status for a
