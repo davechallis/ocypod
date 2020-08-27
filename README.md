@@ -25,3 +25,7 @@ Ocypod is a language-agnostic, Redis-backed job queue server with an HTTP interf
 ## Documentation
 
 * [User guide and API documentation](https://ocypod.readthedocs.io/en/latest/)
+
+## Contributing
+
+Ocypod clients for various languages would be very welcome, will be happy to link to any I hear about.

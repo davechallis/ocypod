@@ -1,4 +1,4 @@
-# 0.5.0 (unreleased)
+# 0.5.0 (2020-08-27)
 
 * Large internal refactoring to move to using async/await throughout.
 * Migrated from using Actix web 1.0 to 2.0.
