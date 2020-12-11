@@ -1358,7 +1358,7 @@ checksum = "8d3b63360ec3cb337817c2dbd47ab4a0f170d285d8e5a2064600f3def1402397"
 
 [[package]]
 name = "ocypod"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "actix-rt",
  "actix-web",
