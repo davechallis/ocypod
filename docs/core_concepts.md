@@ -131,6 +131,28 @@ This is specified as a human readable duration string, and can be set to
 "0s" to disable expiry entirely. In this case, you'll be responsible for
 managing and cleaning up old jobs manually.
 
+---
+
+#### `retries`
+
+This controls the number of times that jobs created in this queue will be automatically retried.
+
+If a job fails or times out and has a number of retries remaining, it will be re-queued.
+
+To disable retries, this can be set to 0.
+
+#### `retry_delays`
+
+This configures an optional list of delays to apply whenever a job is retried. This allows for different backoff strategies
+to be configured, depending on the application.
+
+If the number of retries exceeds the number of retry delays specified, then the last value will continue to be used.
+
+E.g. configuring a queue with `retries: 4` and `retry_delays: ["10s", "1m", "5m"]` means that if a job in this queue
+keeps failing, Ocypod will wait 10 seconds before retrying for the 1st time, 1 minute before retrying a 2nd time, and 5 minutes before retrying for the 3rd and 4th times.
+
+To disable retry delays, this can be ommitted, or set to an empty list.
+
 ## Tag
 
 A tag is a short string that can be attached to a job at creation time.

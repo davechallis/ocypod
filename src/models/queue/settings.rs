@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::models::Duration;
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(default)]
 pub struct Settings {
     pub timeout: Duration,

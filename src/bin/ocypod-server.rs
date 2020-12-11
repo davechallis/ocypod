@@ -1,7 +1,10 @@
+use std::collections::HashMap;
 use actix_web::{web, App, HttpServer};
 use log::{debug, info};
 
 use ocypod::handlers;
+use ocypod::application::RedisManager;
+use ocypod::models::OcyError;
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
@@ -34,11 +37,17 @@ async fn main() -> std::io::Result<()> {
     let redis_manager = match redis_client.get_tokio_connection_manager().await {
         Ok(rm) => rm,
         Err(err) => {
-            eprintln!("Failed to initialise Redis connection manager: {}", err);
+            eprintln!("Failed to initialise Redis connection manager for {}: {}", redis_url, err);
             std::process::exit(1);
         }
     };
     debug!("Initialised Redis connection pool to {}", redis_url);
+
+    // Create/update any queues found in the config file, unless they already exist with the same settings.
+    if let Err(err) = create_queues_from_config(redis_manager.clone(), &config.queue).await {
+        eprintln!("Failed to initialise queues from configuration file: {}", err);
+        std::process::exit(1);
+    }
 
     let http_server_addr = config.server_addr();
     let app_state = web::Data::new(ocypod::models::ApplicationState {
@@ -146,4 +155,33 @@ async fn main() -> std::io::Result<()> {
     // Start HTTP server.
     info!("Starting queue server at: {}", &http_server_addr);
     http_server.run().await
+}
+
+/// Creates any queues found in
+async fn create_queues_from_config(
+    mut conn: redis::aio::ConnectionManager,
+    queues: &Option<HashMap<String, ocypod::models::queue::Settings>>,
+) -> ocypod::models::OcyResult<()> {
+    let queues = match queues {
+        Some(queues) => queues,
+        None => return Ok(()),
+    };
+
+    debug!("Ensuring that {} queue(s) from configuration file exist", queues.len());
+    for (name, settings) in queues {
+        match RedisManager::queue_settings(&mut conn, name).await {
+            Ok(ref existing_settings) => {
+                if settings != existing_settings {
+                    RedisManager::create_or_update_queue(&mut conn, name, settings).await?;
+                } else {
+                    debug!("Queue \"{}\" already exists with configured settings, nothing to create", name);
+                }
+            },
+            Err(OcyError::NoSuchQueue(_)) => {
+                RedisManager::create_or_update_queue(&mut conn, name, settings).await?;
+            },
+            Err(err) => return Err(err),
+        }
+    }
+    Ok(())
 }

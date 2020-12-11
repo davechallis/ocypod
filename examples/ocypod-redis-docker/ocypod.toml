@@ -5,3 +5,6 @@ log_level = "debug"
 
 [redis]
 url = "redis://ocypod-redis"
+
+[queue.default]
+timeout = "10m"

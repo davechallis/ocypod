@@ -60,7 +60,7 @@ These can be changed at any time by re-running the queue creation command - if t
 queue already exists, its settings will be updated, and a 204 response code returned
 on success.
 
-For a full list of queue settings, see the [Queue settings](#queue-settings)
+For a full list of queue settings, see the [Queue settings](core_concepts.md#queue-settings)
 section.
 
 ### Adding a job to the queue

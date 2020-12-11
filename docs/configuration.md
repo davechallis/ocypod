@@ -6,7 +6,7 @@ file.
 All sections and fields of the configuration are optional, and defaults shown
 will be used if not present.
 
-## Server section ###
+## Server section
 
 General configuration for the `ocypod-server` itself, uses `[server]` as a
 section header.
@@ -54,3 +54,42 @@ Example:
 
     [redis]
     url = "redis://:my_password@example.com:6379/my_db"
+
+## Queue sections
+
+Queues can be configured to be created when Ocypod starts by configuring them here, in order to simplify deployment without having to explicitly create queues via HTTP requests.
+
+Configuring a queue here is the equivalent to calling the [PUT /queue/{queue_name}](api.md#put-queuequeue_name) endpoint.
+
+Each queue section should be of the form:
+
+    [queue.{queue_name}]
+
+Note: queues configured in this way will be created at Ocypod startup if they don't exist, or updated if they exist with different settings. Queues will never be deleted if removed from a configuration file, that will remain a manual task.
+
+Fields:
+
+* `timeout` (string)
+* `heartbeat_timeout` (string)
+* `expires_after` (string)
+* `retries` (integer)
+* `retry_delays` (list of string)
+
+For details on these, see the [queue settings](core_concepts.md#queue-settings) section.
+
+Any of the fields may be omitted, in which case default values will be used.
+
+Example:
+
+The configuration below will create 3 queues, named `default`, `my_2nd_queue`, and `another-queue`.
+
+    [queue.default]
+
+    [queue.my_2nd_queue]
+    retries = 5
+    retry_delays = ["10s", "1m", "5m"]
+    
+    [queue.another-queue]
+    timeout = "5m"
+    heartbeat_timeout = "30s"
+    expired_after = "1d"

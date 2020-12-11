@@ -5,6 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::collections::HashMap;
 
 use log::{debug, warn};
 use serde::de::Deserializer;
@@ -58,10 +59,15 @@ pub fn parse_config_from_cli_args() -> Config {
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct Config {
     /// Configuration for the application's HTTP server.
+    #[serde(default)]
     pub server: ServerConfig,
 
     /// Configuration for connecting to Redis.
+    #[serde(default)]
     pub redis: RedisConfig,
+
+    /// Option list of queues to be created on application startup.
+    pub queue: Option<HashMap<String, crate::models::queue::Settings>>,
 }
 
 impl Config {
@@ -196,5 +202,61 @@ impl Default for RedisConfig {
         RedisConfig {
             url: "redis://127.0.0.1".to_owned(),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn parse_minimal() {
+        let toml_str = r#"
+[server]
+host = "0.0.0.0"
+port = 8023
+log_level = "debug"
+
+[redis]
+url = "redis://ocypod-redis"
+"#;
+        let _: Config = toml::from_str(toml_str).unwrap();
+    }
+
+    #[test]
+    fn parse_queues() {
+        let toml_str = r#"
+[server]
+host = "::1"
+port = 1234
+log_level = "info"
+
+[redis]
+url = "redis://example.com:6379"
+
+[queue.default]
+
+[queue.another-queue]
+
+[queue.a_3rd_queue]
+timeout = "3m"
+heartbeat_timeout = "90s"
+expires_after = "90m"
+retries = 4
+retry_delays = ["10s", "1m", "5m"]
+"#;
+        let conf: Config = toml::from_str(toml_str).unwrap();
+        let queues = conf.queue.unwrap();
+        assert_eq!(queues.len(), 3);
+
+        assert!(queues.contains_key("default"));
+        assert!(queues.contains_key("another-queue"));
+
+        let q3 = &queues["a_3rd_queue"];
+        assert_eq!(q3.timeout, Duration::from_secs(180));
+        assert_eq!(q3.heartbeat_timeout, Duration::from_secs(90));
+        assert_eq!(q3.expires_after, Duration::from_secs(5400));
+        assert_eq!(q3.retries, 4);
+        assert_eq!(q3.retry_delays, vec![Duration::from_secs(10), Duration::from_secs(60), Duration::from_secs(300)]);
     }
 }
