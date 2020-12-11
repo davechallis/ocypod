@@ -92,4 +92,4 @@ The configuration below will create 3 queues, named `default`, `my_2nd_queue`, a
     [queue.another-queue]
     timeout = "5m"
     heartbeat_timeout = "30s"
-    expired_after = "1d"
+    expires_after = "1d"

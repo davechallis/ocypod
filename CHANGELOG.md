@@ -1,3 +1,8 @@
+# unreleased
+
+* Add optional configuration sections for queues, simplifying deployment by allowing them to be created when Ocypod starts.
+* Allow `redis` and `server` sections of configuration to optional in configuration, using default values if not specified.
+
 # 0.5.0 (2020-08-27)
 
 * Large internal refactoring to move to using async/await throughout.
