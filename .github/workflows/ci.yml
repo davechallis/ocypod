@@ -1,0 +1,57 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    name: Test
+
+    runs-on: ${{ matrix.os }}
+
+    continue-on-error: ${{ matrix.continue-on-error || false }}
+
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+        rust:
+          - stable
+          - beta
+          - nightly
+
+        include:
+          - rust: nightly
+            continue-on-error: true
+
+          - os: windows-latest
+            rust: stable
+            target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            rust: stable
+            target: x86_64-pc-windows-gnu
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install rust (${{ matrix.rust }})
+        uses: hecrj/setup-rust-action@v1
+        with:
+          rust-version: ${{ matrix.rust }}
+          targets: ${{ matrix.target }}
+      - name: Set default host triple
+        if: matrix.target
+        run: rustup set default-host ${{ matrix.target }}
+
+      - name: Install redis (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install redis-server
+      - name: Install redis (macOS)
+        if: runner.os == 'macOS'
+        run: brew install redis
+      - name: Install redis (Windows)
+        if: runner.os == 'Windows'
+        run: choco install redis-64 --version=3.0.503
+
+      - run: cargo build --verbose --all
+      - run: cargo test --verbose --all -- --test-threads=1

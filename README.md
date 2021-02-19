@@ -1,7 +1,6 @@
 # ocypod
 
-[![Build Status](https://travis-ci.com/davechallis/ocypod.svg?branch=master)](https://travis-ci.com/davechallis/ocypod)
-[![Build status](https://ci.appveyor.com/api/projects/status/yi6kac4bn674upn1?svg=true)](https://ci.appveyor.com/project/davechallis/ocypod)
+[![Build Status](https://github.com/davechallis/ocypod/actions/workflows/ci.yml/badge.svg)](https://github.com/davechallis/ocypod/actions/workflows/ci.yml)
 [![Documentation Status](https://readthedocs.org/projects/ocypod/badge/?version=latest)](https://ocypod.readthedocs.io/en/latest/?badge=latest)
 [![Docker release](https://img.shields.io/docker/v/davechallis/ocypod?sort=semver)](https://hub.docker.com/r/davechallis/ocypod)
 
