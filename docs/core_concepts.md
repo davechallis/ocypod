@@ -12,7 +12,7 @@ by Ocypod, and some of which can be created/updated by clients/workers.
 ### Job lifecycle and statuses
 
 When a job is initially created, it's added to a queue, assigned the
-`created` status.
+`queued` status.
 
 Clients will then poll that queue for new jobs, receiving the job's payload
 (the contents of its `input` field), and the job's ID. The job is removed
@@ -59,7 +59,7 @@ job's lifecycle, and some of which is modifiable by clients.
 
 A job in Ocypod will always have one of the following statuses:
 
-* `created` - set by the server when a job is first created and added to a queue
+* `queued` - set by the server when a job is first created and added to a queue
 * `running` - set by the server when a worker picks up a job
 * `completed` - set by the client to mark a job as successfully completed
 * `failed` - set by the client to mark a job as having failed
