@@ -1,3 +1,8 @@
+# 0.6.1 (2021-08-31)
+
+* Fix bug where calculation of derived "ended" field did not take into account
+  number of retries attempted.
+
 # 0.6.0 (2020-12-11)
 
 * Add optional configuration sections for queues, simplifying deployment by allowing them to be created when Ocypod starts.
