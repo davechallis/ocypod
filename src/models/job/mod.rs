@@ -204,7 +204,10 @@ impl JobMeta {
     pub fn ended(&self) -> bool {
         match self.status() {
             Status::Running | Status::Queued => false,
-            Status::TimedOut | Status::Failed => self.retries() == 0,
+            Status::TimedOut | Status::Failed => {
+                let retries = self.retries();
+                retries == 0 || retries == self.retries_attempted()
+            },
             Status::Completed | Status::Cancelled => true,
         }
     }
