@@ -1,3 +1,7 @@
+# 0.6.2 (2021-09-10)
+
+* Fix bug where requesting "ended" without one of the fields it depended on caused an error.
+
 # 0.6.1 (2021-08-31)
 
 * Fix bug where calculation of derived "ended" field did not take into account
