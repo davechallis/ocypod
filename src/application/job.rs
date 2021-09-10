@@ -47,15 +47,21 @@ impl RedisJob {
             let mut hidden_fields = Vec::new();
 
             // TODO: better handling of internal vs. visible fields here, this is all pretty messy
-            // ended is a derived field from retries and status, so ensure they're present
+            // ended is a derived field from retries and status, so ensure they're present.
             if fields.contains(&job::Field::Ended) {
-                // if caller didn't request retries, ensure it's a hidden field
+                // If caller didn't request retries, ensure it's a hidden field.
                 if !fields.contains(&job::Field::Retries) {
                     hidden_fields.push(job::Field::Retries);
                     fields.push(job::Field::Retries);
                 }
 
-                // if caller didn't request status, ensure it's a hidden field
+                // If caller didn't request retries_attempted, ensure it's a hidden field.
+                if !fields.contains(&job::Field::RetriesAttempted) {
+                    hidden_fields.push(job::Field::RetriesAttempted);
+                    fields.push(job::Field::RetriesAttempted);
+                }
+
+                // If caller didn't request status, ensure it's a hidden field.
                 if !fields.contains(&job::Field::Status) {
                     hidden_fields.push(job::Field::Status);
                     fields.push(job::Field::Status);
