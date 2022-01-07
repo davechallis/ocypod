@@ -1,3 +1,11 @@
+# Unreleased
+
+* Updated to use Actix web 4.x (beta), Tokio 1.x.
+* Switch to using deadpool to manage async Redis connections, to avoid possible
+  race conditions with transactions over a multiplexed connection (see
+  [#26](https://github.com/davechallis/ocypod/issues/26).
+* More consistent HTTP status codes returned on error.
+
 # 0.6.2 (2021-09-10)
 
 * Fix bug where requesting "ended" without one of the fields it depended on caused an error.

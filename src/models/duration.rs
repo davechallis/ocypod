@@ -46,15 +46,6 @@ impl ToRedisArgs for Duration {
     }
 }
 
-impl<'a> ToRedisArgs for &'a Duration {
-    fn write_redis_args<W>(&self, out: &mut W)
-    where
-        W: ?Sized + RedisWrite,
-    {
-        self.0.as_secs().write_redis_args(out)
-    }
-}
-
 impl Serialize for Duration {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&humantime::format_duration(self.0).to_string())

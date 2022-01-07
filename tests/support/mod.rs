@@ -2,25 +2,19 @@
 
 #![allow(dead_code)]
 
-use std::{
-    env, fs,
-    io::{self, Write},
-    path::PathBuf,
-    process,
-    thread::sleep,
-    time::Duration,
-};
+use std::{fs, io, net::SocketAddr, path::PathBuf, process, thread::sleep, time::Duration};
 
 use futures::Future;
 use redis::Value;
+use socket2::{Domain, Socket, Type};
+use tempfile::TempDir;
 
 pub fn current_thread_runtime() -> tokio::runtime::Runtime {
-    let mut builder = tokio::runtime::Builder::new();
+    let mut builder = tokio::runtime::Builder::new_current_thread();
 
-    #[cfg(feature = "aio")]
     builder.enable_io();
 
-    builder.basic_scheduler().build().unwrap()
+    builder.build().unwrap()
 }
 
 pub fn block_on_all<F>(f: F) -> F::Output
@@ -28,13 +22,6 @@ where
     F: Future,
 {
     current_thread_runtime().block_on(f)
-}
-#[cfg(feature = "async-std-comp")]
-pub fn block_on_all_using_async_std<F>(f: F) -> F::Output
-where
-    F: Future,
-{
-    async_std::task::block_on(f)
 }
 
 #[cfg(feature = "cluster")]
@@ -51,23 +38,13 @@ enum ServerType {
 
 pub struct RedisServer {
     pub process: process::Child,
-    stunnel_process: Option<process::Child>,
-    tempdir: Option<tempdir::TempDir>,
+    tempdir: Option<tempfile::TempDir>,
     addr: redis::ConnectionAddr,
 }
 
 impl ServerType {
     fn get_intended() -> ServerType {
-        match env::var("REDISRS_SERVER_TYPE")
-            .ok()
-            .as_ref()
-            .map(|x| &x[..])
-        {
-            Some("tcp") => ServerType::Tcp { tls: false },
-            Some("tcp+tls") => ServerType::Tcp { tls: true },
-            Some("unix") => ServerType::Unix,
-            _ => ServerType::Tcp { tls: false },
-        }
+        ServerType::Tcp { tls: false }
     }
 }
 
@@ -78,14 +55,12 @@ impl RedisServer {
             ServerType::Tcp { tls } => {
                 // this is technically a race but we can't do better with
                 // the tools that redis gives us :(
-                let listener = net2::TcpBuilder::new_v4()
-                    .unwrap()
-                    .reuse_address(true)
-                    .unwrap()
-                    .bind("127.0.0.1:0")
-                    .unwrap()
-                    .listen(1)
-                    .unwrap();
+                let addr = &"127.0.0.1:0".parse::<SocketAddr>().unwrap().into();
+                let socket = Socket::new(Domain::ipv4(), Type::stream(), None).unwrap();
+                socket.set_reuse_address(true).unwrap();
+                socket.bind(addr).unwrap();
+                socket.listen(1).unwrap();
+                let listener = socket.into_tcp_listener();
                 let redis_port = listener.local_addr().unwrap().port();
                 if tls {
                     redis::ConnectionAddr::TcpTls {
@@ -103,18 +78,25 @@ impl RedisServer {
                 redis::ConnectionAddr::Unix(PathBuf::from(&path))
             }
         };
-        RedisServer::new_with_addr(addr, |cmd| cmd.spawn().unwrap())
+        RedisServer::new_with_addr(addr, None, |cmd| {
+            cmd.spawn()
+                .unwrap_or_else(|err| panic!("Failed to run {:?}: {}", cmd, err))
+        })
     }
 
     pub fn new_with_addr<F: FnOnce(&mut process::Command) -> process::Child>(
         addr: redis::ConnectionAddr,
+        tls_paths: Option<TlsFilePaths>,
         spawner: F,
     ) -> RedisServer {
         let mut redis_cmd = process::Command::new("redis-server");
         redis_cmd
             .stdout(process::Stdio::null())
             .stderr(process::Stdio::null());
-        let tempdir = tempdir::TempDir::new("redis").expect("failed to create tempdir");
+        let tempdir = tempfile::Builder::new()
+            .prefix("redis")
+            .tempdir()
+            .expect("failed to create tempdir");
         match addr {
             redis::ConnectionAddr::Tcp(ref bind, server_port) => {
                 redis_cmd
@@ -125,77 +107,38 @@ impl RedisServer {
 
                 RedisServer {
                     process: spawner(&mut redis_cmd),
-                    stunnel_process: None,
                     tempdir: None,
                     addr,
                 }
             }
             redis::ConnectionAddr::TcpTls { ref host, port, .. } => {
-                // prepare redis with unix socket
+                let tls_paths = tls_paths.unwrap_or_else(|| build_keys_and_certs_for_tls(&tempdir));
+
+                // prepare redis with TLS
                 redis_cmd
+                    .arg("--tls-port")
+                    .arg(&port.to_string())
                     .arg("--port")
                     .arg("0")
-                    .arg("--unixsocket")
-                    .arg(tempdir.path().join("redis.sock"));
-
-                // create a self-signed TLS server cert
-                let tls_key_path = tempdir.path().join("key.pem");
-                let tls_cert_path = tempdir.path().join("cert.crt");
-                process::Command::new("openssl")
-                    .arg("req")
-                    .arg("-nodes")
-                    .arg("-new")
-                    .arg("-x509")
-                    .arg("-keyout")
-                    .arg(&tls_key_path)
-                    .arg("-out")
-                    .arg(&tls_cert_path)
-                    .arg("-subj")
-                    .arg("/C=XX/ST=crates/L=redis-rs/O=testing/CN=localhost")
-                    .stdout(process::Stdio::null())
-                    .stderr(process::Stdio::null())
-                    .spawn()
-                    .expect("failed to spawn openssl")
-                    .wait()
-                    .expect("failed to create self-signed TLS certificate");
-
-                let stunnel_config_path = tempdir.path().join("stunnel.conf");
-                let mut stunnel_config_file = fs::File::create(&stunnel_config_path).unwrap();
-                stunnel_config_file
-                    .write_all(
-                        format!(
-                            r#"
-                            pid = {tempdir}/stunnel.pid
-                            cert = {tempdir}/cert.crt
-                            key = {tempdir}/key.pem
-                            verify = 0
-                            foreground = yes
-                            [redis]
-                            accept = {host}:{stunnel_port}
-                            connect = {tempdir}/redis.sock
-                            "#,
-                            tempdir = tempdir.path().display(),
-                            host = host,
-                            stunnel_port = port,
-                        )
-                        .as_bytes(),
-                    )
-                    .expect("could not write stunnel config file");
+                    .arg("--tls-cert-file")
+                    .arg(&tls_paths.redis_crt)
+                    .arg("--tls-key-file")
+                    .arg(&tls_paths.redis_key)
+                    .arg("--tls-ca-cert-file")
+                    .arg(&tls_paths.ca_crt)
+                    .arg("--tls-auth-clients") // Make it so client doesn't have to send cert
+                    .arg("no")
+                    .arg("--bind")
+                    .arg(host);
 
                 let addr = redis::ConnectionAddr::TcpTls {
-                    host: "127.0.0.1".to_string(),
+                    host: host.clone(),
                     port,
                     insecure: true,
                 };
-                let mut stunnel_cmd = process::Command::new("stunnel");
-                stunnel_cmd
-                    .stdout(process::Stdio::null())
-                    .stderr(process::Stdio::null())
-                    .arg(&stunnel_config_path);
 
                 RedisServer {
                     process: spawner(&mut redis_cmd),
-                    stunnel_process: Some(stunnel_cmd.spawn().expect("could not start stunnel")),
                     tempdir: Some(tempdir),
                     addr,
                 }
@@ -208,19 +151,11 @@ impl RedisServer {
                     .arg(&path);
                 RedisServer {
                     process: spawner(&mut redis_cmd),
-                    stunnel_process: None,
                     tempdir: Some(tempdir),
                     addr,
                 }
             }
         }
-    }
-
-    pub fn wait(&mut self) {
-        self.process.wait().unwrap();
-        if let Some(p) = self.stunnel_process.as_mut() {
-            p.wait().unwrap();
-        };
     }
 
     pub fn get_client_addr(&self) -> &redis::ConnectionAddr {
@@ -230,10 +165,6 @@ impl RedisServer {
     pub fn stop(&mut self) {
         let _ = self.process.kill();
         let _ = self.process.wait();
-        if let Some(p) = self.stunnel_process.as_mut() {
-            let _ = p.kill();
-            let _ = p.wait();
-        }
         if let redis::ConnectionAddr::Unix(ref path) = *self.get_client_addr() {
             fs::remove_file(&path).ok();
         }
@@ -256,10 +187,8 @@ impl TestContext {
         let server = RedisServer::new();
 
         let client = redis::Client::open(redis::ConnectionInfo {
-            addr: Box::new(server.get_client_addr().clone()),
-            db: 0,
-            username: None,
-            passwd: None,
+            addr: server.get_client_addr().clone(),
+            redis: Default::default(),
         })
         .unwrap();
         let mut con;
@@ -298,33 +227,23 @@ impl TestContext {
         self.client.get_async_connection().await
     }
 
-    #[cfg(feature = "async-std-comp")]
-    pub async fn async_connection_async_std(&self) -> redis::RedisResult<redis::aio::Connection> {
-        self.client.get_async_std_connection().await
-    }
-
     pub fn stop_server(&mut self) {
         self.server.stop();
     }
 
+    #[cfg(feature = "tokio-comp")]
     pub fn multiplexed_async_connection(
         &self,
     ) -> impl Future<Output = redis::RedisResult<redis::aio::MultiplexedConnection>> {
         self.multiplexed_async_connection_tokio()
     }
 
+    #[cfg(feature = "tokio-comp")]
     pub fn multiplexed_async_connection_tokio(
         &self,
     ) -> impl Future<Output = redis::RedisResult<redis::aio::MultiplexedConnection>> {
         let client = self.client.clone();
         async move { client.get_multiplexed_tokio_connection().await }
-    }
-    #[cfg(feature = "async-std-comp")]
-    pub fn multiplexed_async_connection_async_std(
-        &self,
-    ) -> impl Future<Output = redis::RedisResult<redis::aio::MultiplexedConnection>> {
-        let client = self.client.clone();
-        async move { client.get_multiplexed_async_std_connection().await }
     }
 }
 
@@ -350,5 +269,110 @@ where
         }
         Value::Okay => write!(writer, "+OK\r\n"),
         Value::Status(ref s) => write!(writer, "+{}\r\n", s),
+    }
+}
+
+#[derive(Clone)]
+pub struct TlsFilePaths {
+    redis_crt: PathBuf,
+    redis_key: PathBuf,
+    ca_crt: PathBuf,
+}
+
+pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
+    // Based on shell script in redis's server tests
+    // https://github.com/redis/redis/blob/8c291b97b95f2e011977b522acf77ead23e26f55/utils/gen-test-certs.sh
+    let ca_crt = tempdir.path().join("ca.crt");
+    let ca_key = tempdir.path().join("ca.key");
+    let ca_serial = tempdir.path().join("ca.txt");
+    let redis_crt = tempdir.path().join("redis.crt");
+    let redis_key = tempdir.path().join("redis.key");
+
+    fn make_key<S: AsRef<std::ffi::OsStr>>(name: S, size: usize) {
+        process::Command::new("openssl")
+            .arg("genrsa")
+            .arg("-out")
+            .arg(name)
+            .arg(&format!("{}", size))
+            .stdout(process::Stdio::null())
+            .stderr(process::Stdio::null())
+            .spawn()
+            .expect("failed to spawn openssl")
+            .wait()
+            .expect("failed to create key");
+    }
+
+    // Build CA Key
+    make_key(&ca_key, 4096);
+
+    // Build redis key
+    make_key(&redis_key, 2048);
+
+    // Build CA Cert
+    process::Command::new("openssl")
+        .arg("req")
+        .arg("-x509")
+        .arg("-new")
+        .arg("-nodes")
+        .arg("-sha256")
+        .arg("-key")
+        .arg(&ca_key)
+        .arg("-days")
+        .arg("3650")
+        .arg("-subj")
+        .arg("/O=Redis Test/CN=Certificate Authority")
+        .arg("-out")
+        .arg(&ca_crt)
+        .stdout(process::Stdio::null())
+        .stderr(process::Stdio::null())
+        .spawn()
+        .expect("failed to spawn openssl")
+        .wait()
+        .expect("failed to create CA cert");
+
+    // Read redis key
+    let mut key_cmd = process::Command::new("openssl")
+        .arg("req")
+        .arg("-new")
+        .arg("-sha256")
+        .arg("-subj")
+        .arg("/O=Redis Test/CN=Generic-cert")
+        .arg("-key")
+        .arg(&redis_key)
+        .stdout(process::Stdio::piped())
+        .stderr(process::Stdio::null())
+        .spawn()
+        .expect("failed to spawn openssl");
+
+    // build redis cert
+    process::Command::new("openssl")
+        .arg("x509")
+        .arg("-req")
+        .arg("-sha256")
+        .arg("-CA")
+        .arg(&ca_crt)
+        .arg("-CAkey")
+        .arg(&ca_key)
+        .arg("-CAserial")
+        .arg(&ca_serial)
+        .arg("-CAcreateserial")
+        .arg("-days")
+        .arg("365")
+        .arg("-out")
+        .arg(&redis_crt)
+        .stdin(key_cmd.stdout.take().expect("should have stdout"))
+        .stdout(process::Stdio::null())
+        .stderr(process::Stdio::null())
+        .spawn()
+        .expect("failed to spawn openssl")
+        .wait()
+        .expect("failed to create redis cert");
+
+    key_cmd.wait().expect("failed to create redis key");
+
+    TlsFilePaths {
+        redis_crt,
+        redis_key,
+        ca_crt,
     }
 }

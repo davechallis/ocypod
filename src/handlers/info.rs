@@ -1,5 +1,6 @@
 //! Handlers for getting general information about the Ocypod server as a whole.
 
+use actix_web::ResponseError;
 use actix_web::{web, HttpResponse, Responder};
 use log::error;
 
@@ -15,18 +16,17 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 ///
 /// * 200 - JSON containing summary of server information
 pub async fn index(data: web::Data<ApplicationState>) -> impl Responder {
-    let mut conn = data.redis_conn_manager.clone();
+    let mut conn = match data.redis_conn_pool.get().await {
+        Ok(conn) => conn,
+        Err(err) => return OcyError::RedisConnection(err).error_response(),
+    };
 
     match RedisManager::server_info(&mut conn).await {
         Ok(info) => HttpResponse::Ok().json(info),
-        Err(OcyError::RedisConnection(err)) => {
-            error!("Failed to fetch summary data: {}", err);
-            HttpResponse::ServiceUnavailable().body(err)
-        }
         Err(err) => {
             error!("Failed to fetch summary data: {}", err);
-            HttpResponse::InternalServerError().body(err)
-        }
+            err.error_response()
+        },
     }
 }
 

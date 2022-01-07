@@ -93,12 +93,6 @@ impl FromRedisValue for Status {
     }
 }
 
-impl<'a> ToRedisArgs for &'a Status {
-    fn write_redis_args<W: ?Sized + RedisWrite>(&self, out: &mut W) {
-        self.as_ref().write_redis_args(out)
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
