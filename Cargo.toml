@@ -14,21 +14,24 @@ appveyor = { repository = "davechallis/ocypod" }
 
 [dependencies]
 structopt = "0.3"
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.5"
 human-size = "0.4"
 chrono = { version = "0.4", features = ["serde"] }
-redis = { version = "0.17", features = ["connection-manager"] }
+redis = "0.21"
 log = "0.4"
 humantime = "2.0"
 env_logger = "0.7"
-actix-web = "3.3"
+actix-web = "4.0.0-beta.19"
 actix-rt = "1.0"
+deadpool = { version = "0.9", features = ["managed", "rt_tokio_1"] }
+deadpool-redis = "0.10"
 
 [dev-dependencies]
 net2 = "0.2"
 rand = "0.4"
-tempdir = "0.3"
+tempfile = "3.2"
 futures = "0.3"
+socket2 = "0.3"

@@ -1,6 +1,6 @@
 use log::error;
 
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::{web, HttpResponse, Responder, ResponseError};
 
 use crate::application::RedisManager;
 use crate::models::{ApplicationState, OcyError};
@@ -10,17 +10,16 @@ pub async fn tagged_jobs(
     data: web::Data<ApplicationState>,
 ) -> impl Responder {
     let tag = path.into_inner();
-    let mut conn = data.redis_conn_manager.clone();
+    let mut conn = match data.redis_conn_pool.get().await {
+        Ok(conn) => conn,
+        Err(err) => return OcyError::from(err).error_response(),
+    };
 
     match RedisManager::tagged_job_ids(&mut conn, &tag).await {
         Ok(tags) => HttpResponse::Ok().json(tags),
-        Err(OcyError::RedisConnection(err)) => {
-            error!("Failed to read tag data: {}", err);
-            HttpResponse::ServiceUnavailable().body(err)
-        }
         Err(err) => {
             error!("Failed to read tag data: {}", err);
-            HttpResponse::InternalServerError().body(err)
+            err.error_response()
         }
     }
 }

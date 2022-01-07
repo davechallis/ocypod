@@ -1,9 +1,9 @@
 //! Defines handlers for health check HTTP endpoints.
 
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::{web, HttpResponse, Responder, ResponseError};
 use serde::Serialize;
 
-use crate::models::ApplicationState;
+use crate::models::{ApplicationState, OcyError};
 
 #[derive(Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -37,7 +37,10 @@ impl Health {
 }
 
 pub async fn index(data: web::Data<ApplicationState>) -> impl Responder {
-    let mut conn = data.redis_conn_manager.clone();
+    let mut conn = match data.redis_conn_pool.get().await {
+        Ok(conn) => conn,
+        Err(err) => return OcyError::RedisConnection(err).error_response(),
+    };
 
     let reply: String = match redis::cmd("PING").query_async(&mut conn).await {
         Ok(s) => s,

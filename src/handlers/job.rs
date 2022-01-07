@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use log::error;
 use serde::Deserialize;
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::{web, HttpResponse, Responder, ResponseError};
 
 use crate::application::RedisManager;
 use crate::models::{job, ApplicationState, OcyError};
@@ -46,19 +46,18 @@ pub async fn index(
         None => None,
     };
 
-    let mut conn = data.redis_conn_manager.clone();
+    let mut conn = match data.redis_conn_pool.get().await {
+        Ok(conn) => conn,
+        Err(err) => return OcyError::RedisConnection(err).error_response(),
+    };
 
     match RedisManager::job_fields(&mut conn, job_id, fields.as_deref()).await {
         Ok(job) => HttpResponse::Ok().json(job),
-        Err(OcyError::NoSuchJob(_)) => HttpResponse::NotFound().into(),
-        Err(OcyError::RedisConnection(err)) => {
-            error!("[job:{}] failed to fetch metadata fields: {}", job_id, err);
-            HttpResponse::ServiceUnavailable().body(err)
-        }
+        Err(err @ OcyError::NoSuchJob(_)) => err.error_response(),
         Err(err) => {
             error!("[job:{}] failed to fetch metadata fields: {}", job_id, err);
-            HttpResponse::InternalServerError().body(err)
-        }
+            err.error_response()
+        },
     }
 }
 
@@ -72,19 +71,18 @@ pub async fn index(
 /// * 503 - Redis connection unavailable
 pub async fn status(path: web::Path<u64>, data: web::Data<ApplicationState>) -> impl Responder {
     let job_id = path.into_inner();
-    let mut conn = data.redis_conn_manager.clone();
+    let mut conn = match data.redis_conn_pool.get().await {
+        Ok(conn) => conn,
+        Err(err) => return OcyError::RedisConnection(err).error_response(),
+    };
 
     match RedisManager::job_status(&mut conn, job_id).await {
         Ok(status) => HttpResponse::Ok().json(status),
-        Err(OcyError::NoSuchJob(_)) => HttpResponse::NotFound().into(),
-        Err(OcyError::RedisConnection(err)) => {
-            error!("[job:{}] failed to fetch status: {}", job_id, err);
-            HttpResponse::ServiceUnavailable().body(err)
-        }
+        Err(err @ OcyError::NoSuchJob(_)) => err.error_response(),
         Err(err) => {
             error!("[job:{}] failed to fetch status: {}", job_id, err);
-            HttpResponse::InternalServerError().body(err)
-        }
+            err.error_response()
+        },
     }
 }
 
@@ -106,21 +104,18 @@ pub async fn update(
 ) -> impl Responder {
     let job_id = path.into_inner();
     let update_req = json.into_inner();
-    let mut conn = data.redis_conn_manager.clone();
+    let mut conn = match data.redis_conn_pool.get().await {
+        Ok(conn) => conn,
+        Err(err) => return OcyError::RedisConnection(err).error_response(),
+    };
 
     match RedisManager::update_job(&mut conn, job_id, &update_req).await {
         Ok(_) => HttpResponse::NoContent().into(),
-        Err(OcyError::BadRequest(msg)) => HttpResponse::BadRequest().body(msg),
-        Err(OcyError::Conflict(msg)) => HttpResponse::Conflict().body(msg),
-        Err(OcyError::NoSuchJob(_)) => HttpResponse::NotFound().into(),
-        Err(OcyError::RedisConnection(err)) => {
-            error!("[job:{}] failed to update metadata: {}", job_id, err);
-            HttpResponse::ServiceUnavailable().body(err)
-        }
+        Err(err @ OcyError::BadRequest(_) | err @ OcyError::Conflict(_) | err @ OcyError::NoSuchJob(_)) => err.error_response(),
         Err(err) => {
             error!("[job:{}] failed to update metadata: {}", job_id, err);
-            HttpResponse::InternalServerError().body(err)
-        }
+            err.error_response()
+        },
     }
 }
 
@@ -136,22 +131,20 @@ pub async fn update(
 /// * 503 - Redis connection unavailable
 pub async fn heartbeat(path: web::Path<u64>, data: web::Data<ApplicationState>) -> impl Responder {
     let job_id = path.into_inner();
-    let mut conn = data.redis_conn_manager.clone();
+    let mut conn = match data.redis_conn_pool.get().await {
+        Ok(conn) => conn,
+        Err(err) => return OcyError::RedisConnection(err).error_response(),
+    };
 
     match RedisManager::update_job_heartbeat(&mut conn, job_id).await {
         Ok(_) => HttpResponse::NoContent()
             .reason("Heartbeat updated")
             .finish(),
-        Err(OcyError::NoSuchJob(_)) => HttpResponse::NotFound().into(),
-        Err(OcyError::Conflict(msg)) => HttpResponse::Conflict().body(msg),
-        Err(OcyError::RedisConnection(err)) => {
-            error!("[job:{}] failed to update heartbeat: {}", job_id, err);
-            HttpResponse::ServiceUnavailable().body(err)
-        }
+        Err(err @ OcyError::NoSuchJob(_)) | Err(err @ OcyError::Conflict(_)) => err.error_response(),
         Err(err) => {
             error!("[job:{}] failed to update heartbeat: {}", job_id, err);
-            HttpResponse::InternalServerError().body(err)
-        }
+            err.error_response()
+        },
     }
 }
 
@@ -171,19 +164,18 @@ pub async fn heartbeat(path: web::Path<u64>, data: web::Data<ApplicationState>) 
 /// * 503 - Redis connection unavailable
 pub async fn delete(path: web::Path<u64>, data: web::Data<ApplicationState>) -> impl Responder {
     let job_id = path.into_inner();
-    let mut conn = data.redis_conn_manager.clone();
+    let mut conn = match data.redis_conn_pool.get().await {
+        Ok(conn) => conn,
+        Err(err) => return OcyError::RedisConnection(err).error_response(),
+    };
 
     match RedisManager::delete_job(&mut conn, job_id).await {
         Ok(true) => HttpResponse::NoContent().reason("Job deleted").finish(),
         Ok(false) => HttpResponse::NotFound().into(),
-        Err(OcyError::RedisConnection(err)) => {
-            error!("[job:{}] failed to delete: {}", job_id, err);
-            HttpResponse::ServiceUnavailable().body(err)
-        }
         Err(err) => {
             error!("[job:{}] failed to delete: {}", job_id, err);
-            HttpResponse::InternalServerError().body(err)
-        }
+            err.error_response()
+        },
     }
 }
 
@@ -197,18 +189,17 @@ pub async fn delete(path: web::Path<u64>, data: web::Data<ApplicationState>) -> 
 /// * 503 - Redis connection unavailable
 pub async fn output(path: web::Path<u64>, data: web::Data<ApplicationState>) -> impl Responder {
     let job_id = path.into_inner();
-    let mut conn = data.redis_conn_manager.clone();
+    let mut conn = match data.redis_conn_pool.get().await {
+        Ok(conn) => conn,
+        Err(err) => return OcyError::RedisConnection(err).error_response(),
+    };
 
     match RedisManager::job_output(&mut conn, job_id).await {
         Ok(v) => HttpResponse::Ok().json(v),
-        Err(OcyError::NoSuchJob(_)) => HttpResponse::NotFound().reason("Job Not Found").finish(),
-        Err(OcyError::RedisConnection(err)) => {
-            error!("[job:{}] failed to fetch output: {}", job_id, err);
-            HttpResponse::ServiceUnavailable().body(err)
-        }
+        Err(err @ OcyError::NoSuchJob(_)) => err.error_response(),
         Err(err) => {
             error!("[job:{}] failed to fetch output: {}", job_id, err);
-            HttpResponse::InternalServerError().body(err)
+            err.error_response()
         }
     }
 }
@@ -229,20 +220,17 @@ pub async fn set_output(
 ) -> impl Responder {
     let job_id = path.into_inner();
     let value = json.into_inner();
-    let mut conn = data.redis_conn_manager.clone();
+    let mut conn = match data.redis_conn_pool.get().await {
+        Ok(conn) => conn,
+        Err(err) => return OcyError::RedisConnection(err).error_response(),
+    };
 
     match RedisManager::set_job_output(&mut conn, job_id, &value).await {
         Ok(_) => HttpResponse::NoContent().into(),
-        Err(OcyError::NoSuchJob(_)) => HttpResponse::NotFound().reason("Job Not Found").finish(),
-        Err(OcyError::BadRequest(msg)) => HttpResponse::BadRequest().body(msg),
-        Err(OcyError::Conflict(msg)) => HttpResponse::Conflict().body(msg),
-        Err(OcyError::RedisConnection(err)) => {
-            error!("[job:{}] failed set output: {}", job_id, err);
-            HttpResponse::ServiceUnavailable().body(err)
-        }
+        Err(err @ OcyError::NoSuchJob(_) | err @ OcyError::BadRequest(_) | err @ OcyError::Conflict(_)) => err.error_response(),
         Err(err) => {
             error!("[job:{}] failed set output: {}", job_id, err);
-            HttpResponse::InternalServerError().body(err)
-        }
+            err.error_response()
+        },
     }
 }
