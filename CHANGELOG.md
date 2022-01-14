@@ -1,4 +1,4 @@
-# Unreleased
+# 0.7.0 (2022-01-14)
 
 * Updated to use Actix web 4.x (beta), Tokio 1.x.
 * Switch to using deadpool to manage async Redis connections, to avoid possible
