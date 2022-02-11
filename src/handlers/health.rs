@@ -37,11 +37,12 @@ impl Health {
 }
 
 pub async fn index(data: web::Data<ApplicationState>) -> impl Responder {
-    let mut conn = match data.redis_conn_pool.get().await {
+    let mut conn = match data.pool.get().await {
         Ok(conn) => conn,
         Err(err) => return OcyError::RedisConnection(err).error_response(),
     };
 
+    // TODO: move this into RedisManager.
     let reply: String = match redis::cmd("PING").query_async(&mut conn).await {
         Ok(s) => s,
         Err(err) => return HttpResponse::Ok().json(Health::new_from_error(err.to_string())),

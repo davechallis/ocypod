@@ -1,3 +1,9 @@
+# Unreleased
+
+* Add `key_namespace` parameter to the `redis` configuration section. Adds a
+  prefix to all keys used by Ocypod to allow Redis to be shared with other
+  applications without risk of key collisions.
+
 # 0.7.0 (2022-01-14)
 
 * Updated to use Actix web 4.x (beta), Tokio 1.x.

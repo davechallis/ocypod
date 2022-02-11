@@ -6,7 +6,6 @@ use log::error;
 use serde::Deserialize;
 use actix_web::{web, HttpResponse, Responder, ResponseError};
 
-use crate::application::RedisManager;
 use crate::models::{job, ApplicationState, OcyError};
 
 #[derive(Deserialize)]
@@ -46,12 +45,12 @@ pub async fn index(
         None => None,
     };
 
-    let mut conn = match data.redis_conn_pool.get().await {
+    let mut conn = match data.pool.get().await {
         Ok(conn) => conn,
         Err(err) => return OcyError::RedisConnection(err).error_response(),
     };
 
-    match RedisManager::job_fields(&mut conn, job_id, fields.as_deref()).await {
+    match data.redis_manager.job_fields(&mut conn, job_id, fields.as_deref()).await {
         Ok(job) => HttpResponse::Ok().json(job),
         Err(err @ OcyError::NoSuchJob(_)) => err.error_response(),
         Err(err) => {
@@ -71,12 +70,12 @@ pub async fn index(
 /// * 503 - Redis connection unavailable
 pub async fn status(path: web::Path<u64>, data: web::Data<ApplicationState>) -> impl Responder {
     let job_id = path.into_inner();
-    let mut conn = match data.redis_conn_pool.get().await {
+    let mut conn = match data.pool.get().await {
         Ok(conn) => conn,
         Err(err) => return OcyError::RedisConnection(err).error_response(),
     };
 
-    match RedisManager::job_status(&mut conn, job_id).await {
+    match data.redis_manager.job_status(&mut conn, job_id).await {
         Ok(status) => HttpResponse::Ok().json(status),
         Err(err @ OcyError::NoSuchJob(_)) => err.error_response(),
         Err(err) => {
@@ -104,12 +103,12 @@ pub async fn update(
 ) -> impl Responder {
     let job_id = path.into_inner();
     let update_req = json.into_inner();
-    let mut conn = match data.redis_conn_pool.get().await {
+    let mut conn = match data.pool.get().await {
         Ok(conn) => conn,
         Err(err) => return OcyError::RedisConnection(err).error_response(),
     };
 
-    match RedisManager::update_job(&mut conn, job_id, &update_req).await {
+    match data.redis_manager.update_job(&mut conn, job_id, &update_req).await {
         Ok(_) => HttpResponse::NoContent().into(),
         Err(err @ OcyError::BadRequest(_) | err @ OcyError::Conflict(_) | err @ OcyError::NoSuchJob(_)) => err.error_response(),
         Err(err) => {
@@ -131,12 +130,12 @@ pub async fn update(
 /// * 503 - Redis connection unavailable
 pub async fn heartbeat(path: web::Path<u64>, data: web::Data<ApplicationState>) -> impl Responder {
     let job_id = path.into_inner();
-    let mut conn = match data.redis_conn_pool.get().await {
+    let mut conn = match data.pool.get().await {
         Ok(conn) => conn,
         Err(err) => return OcyError::RedisConnection(err).error_response(),
     };
 
-    match RedisManager::update_job_heartbeat(&mut conn, job_id).await {
+    match data.redis_manager.update_job_heartbeat(&mut conn, job_id).await {
         Ok(_) => HttpResponse::NoContent()
             .reason("Heartbeat updated")
             .finish(),
@@ -164,12 +163,12 @@ pub async fn heartbeat(path: web::Path<u64>, data: web::Data<ApplicationState>) 
 /// * 503 - Redis connection unavailable
 pub async fn delete(path: web::Path<u64>, data: web::Data<ApplicationState>) -> impl Responder {
     let job_id = path.into_inner();
-    let mut conn = match data.redis_conn_pool.get().await {
+    let mut conn = match data.pool.get().await {
         Ok(conn) => conn,
         Err(err) => return OcyError::RedisConnection(err).error_response(),
     };
 
-    match RedisManager::delete_job(&mut conn, job_id).await {
+    match data.redis_manager.delete_job(&mut conn, job_id).await {
         Ok(true) => HttpResponse::NoContent().reason("Job deleted").finish(),
         Ok(false) => HttpResponse::NotFound().into(),
         Err(err) => {
@@ -189,12 +188,12 @@ pub async fn delete(path: web::Path<u64>, data: web::Data<ApplicationState>) -> 
 /// * 503 - Redis connection unavailable
 pub async fn output(path: web::Path<u64>, data: web::Data<ApplicationState>) -> impl Responder {
     let job_id = path.into_inner();
-    let mut conn = match data.redis_conn_pool.get().await {
+    let mut conn = match data.pool.get().await {
         Ok(conn) => conn,
         Err(err) => return OcyError::RedisConnection(err).error_response(),
     };
 
-    match RedisManager::job_output(&mut conn, job_id).await {
+    match data.redis_manager.job_output(&mut conn, job_id).await {
         Ok(v) => HttpResponse::Ok().json(v),
         Err(err @ OcyError::NoSuchJob(_)) => err.error_response(),
         Err(err) => {
@@ -220,12 +219,12 @@ pub async fn set_output(
 ) -> impl Responder {
     let job_id = path.into_inner();
     let value = json.into_inner();
-    let mut conn = match data.redis_conn_pool.get().await {
+    let mut conn = match data.pool.get().await {
         Ok(conn) => conn,
         Err(err) => return OcyError::RedisConnection(err).error_response(),
     };
 
-    match RedisManager::set_job_output(&mut conn, job_id, &value).await {
+    match data.redis_manager.set_job_output(&mut conn, job_id, &value).await {
         Ok(_) => HttpResponse::NoContent().into(),
         Err(err @ OcyError::NoSuchJob(_) | err @ OcyError::BadRequest(_) | err @ OcyError::Conflict(_)) => err.error_response(),
         Err(err) => {

@@ -3,13 +3,15 @@
 use log::{debug, info};
 use redis::{aio::ConnectionLike, AsyncCommands, Pipeline, RedisWrite, ToRedisArgs};
 
-use super::{keys, RedisQueue, RedisTag};
+use super::{RedisQueue, RedisManager};
 use crate::models::{job, DateTime, OcyError, OcyResult};
 use crate::transaction_async;
 
 /// Convenient wrapper struct for combing a job ID plus a connection.
 #[derive(Debug)]
-pub struct RedisJob {
+pub struct RedisJob<'a> {
+    redis_manager: &'a RedisManager,
+
     /// ID of the job.
     pub id: u64,
 
@@ -18,7 +20,7 @@ pub struct RedisJob {
     pub key: String,
 }
 
-impl ToRedisArgs for &RedisJob {
+impl<'a> ToRedisArgs for &RedisJob<'a> {
     fn to_redis_args(&self) -> Vec<Vec<u8>> {
         self.key.to_redis_args()
     }
@@ -28,12 +30,13 @@ impl ToRedisArgs for &RedisJob {
     }
 }
 
-impl RedisJob {
+impl<'a> RedisJob<'a> {
     /// Create a new RedisJob with given ID and given connection. This ID may or may not exist.
-    pub fn new(id: u64) -> Self {
+    pub fn new(redis_manager: &'a RedisManager, id: u64) -> Self {
         Self {
+            redis_manager,
             id,
-            key: Self::build_key(id),
+            key: Self::build_key(&redis_manager.job_prefix, id),
         }
     }
 
@@ -107,8 +110,8 @@ impl RedisJob {
     }
 
     /// Create a Redis key for a job from a job ID.
-    pub fn build_key(id: u64) -> String {
-        format!("{}{}", keys::JOB_PREFIX, id)
+    fn build_key(job_key_prefix: &str, id: u64) -> String {
+        format!("{}{}", job_key_prefix, id)
     }
 
     /// Update this job's status and/or output from a given request.
@@ -141,9 +144,9 @@ impl RedisJob {
     pub fn complete<'b>(&self, pipe: &'b mut Pipeline) -> &'b mut Pipeline {
         pipe.hset(&self.key, job::Field::Status, job::Status::Completed)
             .hset(&self.key, job::Field::EndedAt, DateTime::now())
-            .lrem(keys::RUNNING_KEY, 1, self.id)
-            .lpush(keys::ENDED_KEY, self.id)
-            .incr(keys::STAT_JOBS_COMPLETED_KEY, 1)
+            .lrem(&self.redis_manager.running_key,  1, self.id)
+            .lpush(&self.redis_manager.ended_key, self.id)
+            .incr(&self.redis_manager.stat_jobs_completed_key, 1)
     }
 
     /// Add commands to pipeline to re-queue this job so that it can be retried later.
@@ -169,10 +172,10 @@ impl RedisJob {
             ],
         )
         .hset(&self.key, job::Field::Status, job::Status::Queued)
-        .lrem(keys::FAILED_KEY, 1, self.id)
-        .lrem(keys::ENDED_KEY, 1, self.id)
+        .lrem(&self.redis_manager.failed_key, 1, self.id)
+        .lrem(&self.redis_manager.ended_key, 1, self.id)
         .lpush(&queue.jobs_key, self.id)
-        .incr(keys::STAT_JOBS_RETRIED_KEY, 1);
+        .incr(&self.redis_manager.stat_jobs_retried_key, 1);
 
         if incr_retries {
             pipe.hincr(&self.key, job::Field::RetriesAttempted, 1);
@@ -193,11 +196,11 @@ impl RedisJob {
         Ok(pipe
             .hset(&self.key, job::Field::Status, job::Status::Cancelled)
             .hset(&self.key, job::Field::EndedAt, DateTime::now())
-            .lrem(keys::RUNNING_KEY, 1, self.id) // remove from running queue if present
-            .lrem(keys::FAILED_KEY, 1, self.id) // remove from failed queue if present
+            .lrem(&self.redis_manager.running_key, 1, self.id) // remove from running queue if present
+            .lrem(&self.redis_manager.failed_key, 1, self.id) // remove from failed queue if present
             .lrem(&queue.jobs_key, 1, self.id) // remove from original queue if present
-            .rpush(keys::ENDED_KEY, self.id) // add to ended queue
-            .incr(keys::STAT_JOBS_CANCELLED_KEY, 1))
+            .rpush(&self.redis_manager.ended_key, self.id) // add to ended queue
+            .incr(&self.redis_manager.stat_jobs_cancelled_key, 1))
     }
 
     /// Add commands to pipeline to mark this job as failed or timed out.
@@ -206,15 +209,15 @@ impl RedisJob {
     pub fn fail<'b>(&self, pipe: &'b mut Pipeline, status: &job::Status) -> &'b mut Pipeline {
         assert!(status == &job::Status::TimedOut || status == &job::Status::Failed);
         let stats_key = match status {
-            job::Status::TimedOut => keys::STAT_JOBS_TIMED_OUT_KEY,
-            job::Status::Failed => keys::STAT_JOBS_FAILED_KEY,
+            job::Status::TimedOut => &self.redis_manager.stat_jobs_timed_out_key,
+            job::Status::Failed => &self.redis_manager.stat_jobs_failed_key,
             _ => panic!("fail() was called with invalid status of: {}", status),
         };
 
         pipe.hset(&self.key, job::Field::Status, status)
             .hset(&self.key, job::Field::EndedAt, DateTime::now())
-            .lrem(keys::RUNNING_KEY, 1, self.id)
-            .rpush(keys::FAILED_KEY, self.id)
+            .lrem(&self.redis_manager.running_key, 1, self.id)
+            .rpush(&self.redis_manager.failed_key, self.id)
             .incr(stats_key, 1)
     }
 
@@ -226,8 +229,8 @@ impl RedisJob {
             match self.status(conn).await {
                 Ok(job::Status::Failed) | Ok(job::Status::TimedOut) => {
                     let result: Option<()> = pipe_ref
-                        .lrem(keys::FAILED_KEY, 1, self.id)
-                        .rpush(keys::ENDED_KEY, self.id)
+                        .lrem(&self.redis_manager.failed_key, 1, self.id)
+                        .rpush(&self.redis_manager.ended_key, self.id)
                         .query_async(conn)
                         .await?;
                     result.map(|_| true)
@@ -254,12 +257,12 @@ impl RedisJob {
     }
 
     /// Get queue this job was created in. This queue may or may not exist.
-    pub async fn queue<C: ConnectionLike + Send>(&self, conn: &mut C) -> OcyResult<RedisQueue> {
+    pub async fn queue<C: ConnectionLike + Send>(&self, conn: &mut C) -> OcyResult<RedisQueue<'a>> {
         match conn
             .hget::<_, _, Option<String>>(&self.key, job::Field::Queue)
             .await?
         {
-            Some(queue) => Ok(RedisQueue::from_string(queue)?),
+            Some(queue) => Ok(RedisQueue::new(&self.redis_manager, queue)?),
             None => Err(OcyError::NoSuchJob(self.id)),
         }
     }
@@ -527,7 +530,7 @@ impl RedisJob {
             .await?;
 
         if let Some(queue) = queue {
-            pipe.lrem(RedisQueue::build_jobs_key(&queue), 1, self.id)
+            pipe.lrem(RedisQueue::new(&self.redis_manager, &queue)?.jobs_key, 1, self.id)
                 .ignore();
         } else {
             // queue is mandatory field, if missing then means job has been deleted
@@ -536,16 +539,16 @@ impl RedisJob {
 
         // delete job itself, and remove it from all global queues it might be in
         pipe.del(&self.key) // always delete job itself
-            .lrem(keys::FAILED_KEY, 1, self.id)
+            .lrem(&self.redis_manager.failed_key, 1, self.id)
             .ignore()
-            .lrem(keys::RUNNING_KEY, 1, self.id)
+            .lrem(&self.redis_manager.running_key, 1, self.id)
             .ignore()
-            .lrem(keys::ENDED_KEY, 1, self.id)
+            .lrem(&self.redis_manager.ended_key, 1, self.id)
             .ignore();
 
         if let Some(tags) = tags {
             for tag in serde_json::from_str::<Vec<&str>>(&tags).unwrap() {
-                pipe.srem(RedisTag::build_key(tag), self.id).ignore(); // delete all tags
+                pipe.srem(self.redis_manager.build_tag_key(tag)?, self.id).ignore(); // delete all tags
             }
         }
 

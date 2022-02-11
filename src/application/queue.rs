@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use log::{debug, info};
 use redis::{aio::ConnectionLike, AsyncCommands, RedisResult};
 
-use super::{keys, RedisJob, RedisTag};
+use super::{RedisJob, RedisManager};
+use crate::application::manager::QUEUE_JOBS_SUFFIX;
 use crate::models::{job, queue, OcyError, OcyResult};
 use crate::redis_utils::vec_from_redis_pipe;
 use crate::transaction_async;
@@ -14,7 +15,9 @@ use crate::transaction_async;
 ///
 /// Primarily used by RedisManager as a wrapper around some queue information.
 #[derive(Debug)]
-pub struct RedisQueue {
+pub struct RedisQueue<'a> {
+    redis_manager: &'a RedisManager,
+
     /// Name of the queue.
     pub name: String,
 
@@ -25,14 +28,15 @@ pub struct RedisQueue {
     pub jobs_key: String,
 }
 
-impl RedisQueue {
+impl<'a> RedisQueue<'a> {
     /// Get a new RedisQueue struct, ensuring its name is valid.
-    pub fn from_string<S: Into<String>>(name: S) -> OcyResult<Self> {
+    pub fn new<S: Into<String>>(redis_manager: &'a RedisManager, name: S) -> OcyResult<Self> {
         let name = name.into();
         if Self::is_valid_name(&name) {
-            let key = Self::build_key(&name);
-            let jobs_key = Self::build_jobs_key(&name);
+            let key = Self::build_key(&redis_manager.queue_prefix, &name);
+            let jobs_key = Self::build_jobs_key(&redis_manager.queue_prefix, &name);
             Ok(Self {
+                redis_manager,
                 name,
                 key,
                 jobs_key,
@@ -87,7 +91,7 @@ impl RedisQueue {
             .ignore()
             .hset(&self.key, queue::Field::Retries, settings.retries)
             .ignore()
-            .sadd(keys::QUEUES_KEY, &self.name)
+            .sadd(&self.redis_manager.queues_key, &self.name)
             .ignore();
 
         if settings.retry_delays.is_empty() {
@@ -135,7 +139,7 @@ impl RedisQueue {
 
                     let job_ids: Vec<u64> = conn.lrange(&self.jobs_key, 0, -1).await?;
                     for job_id in &job_ids {
-                        let job_key = RedisJob::build_key(*job_id);
+                        let job_key = RedisJob::new(&self.redis_manager, *job_id).key().to_owned();
                         tag_pipe.hget(&job_key, &[job::Field::Id, job::Field::Tags]);
                         keys_to_del.push(job_key);
                     }
@@ -148,14 +152,14 @@ impl RedisQueue {
                     for (job_id, tags) in tagged_jobs {
                         if let (Some(job_id), Some(tags)) = (job_id, tags) {
                             for tag in serde_json::from_str::<Vec<&str>>(&tags).unwrap() {
-                                pipe_ref.srem(RedisTag::build_key(tag), job_id);
+                                pipe_ref.srem(self.redis_manager.build_tag_key(tag)?, job_id);
                             }
                         }
                     }
 
                     let result: Option<()> = pipe_ref
                         .del(keys_to_del)
-                        .srem(keys::QUEUES_KEY, &self.name)
+                        .srem(&self.redis_manager.queues_key, &self.name)
                         .query_async(conn)
                         .await?;
                     result.map(|_| (true, job_ids.len()))
@@ -186,13 +190,13 @@ impl RedisQueue {
 
         for queue_key in &[
             &self.jobs_key,
-            keys::FAILED_KEY,
-            keys::ENDED_KEY,
-            keys::RUNNING_KEY,
+            &self.redis_manager.failed_key,
+            &self.redis_manager.ended_key,
+            &self.redis_manager.running_key,
         ] {
             for job_id in conn.lrange::<_, Vec<u64>>(*queue_key, 0, -1).await? {
                 pipe.hget(
-                    RedisJob::new(job_id).key(),
+                    RedisJob::new(&self.redis_manager, job_id).key(),
                     &[job::Field::Id, job::Field::Queue, job::Field::Status],
                 );
             }
@@ -267,7 +271,7 @@ impl RedisQueue {
     /// Return either this queue or an error if it doesn't exist.
     ///
     /// Convenience function for chaining function calls on queues.
-    pub async fn ensure_exists<C: ConnectionLike + Send>(self, conn: &mut C) -> OcyResult<Self> {
+    pub async fn ensure_exists<C: ConnectionLike + Send>(self, conn: &mut C) -> OcyResult<RedisQueue<'a>> {
         if self.exists(conn).await? {
             Ok(self)
         } else {
@@ -276,13 +280,13 @@ impl RedisQueue {
     }
 
     /// Generate a Redis key to use for this queue's settings.
-    pub fn build_key(name: &str) -> String {
-        format!("{}{}", keys::QUEUE_PREFIX, name)
+    pub fn build_key(queue_prefix: &str, name: &str) -> String {
+        format!("{}{}", queue_prefix, name)
     }
 
     /// Generate a Redis key to use for this queue's job IDs.
-    pub fn build_jobs_key(name: &str) -> String {
-        format!("{}{}{}", keys::QUEUE_PREFIX, name, keys::QUEUE_JOBS_SUFFIX)
+    pub fn build_jobs_key(queue_prefix: &str, name: &str) -> String {
+        format!("{}{}{}", queue_prefix, name, QUEUE_JOBS_SUFFIX)
     }
 }
 

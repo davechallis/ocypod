@@ -4,7 +4,6 @@ use actix_web::ResponseError;
 use actix_web::{web, HttpResponse, Responder};
 use log::error;
 
-use crate::application::RedisManager;
 use crate::models::ApplicationState;
 use crate::models::OcyError;
 
@@ -16,12 +15,12 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 ///
 /// * 200 - JSON containing summary of server information
 pub async fn index(data: web::Data<ApplicationState>) -> impl Responder {
-    let mut conn = match data.redis_conn_pool.get().await {
+    let mut conn = match data.pool.get().await {
         Ok(conn) => conn,
         Err(err) => return OcyError::RedisConnection(err).error_response(),
     };
 
-    match RedisManager::server_info(&mut conn).await {
+    match data.redis_manager.server_info(&mut conn).await {
         Ok(info) => HttpResponse::Ok().json(info),
         Err(err) => {
             error!("Failed to fetch summary data: {}", err);

@@ -195,12 +195,17 @@ impl Default for ServerConfig {
 pub struct RedisConfig {
     /// Redis URL to connect to. Defaults to "redis://127.0.0.1".
     pub url: String,
+
+    /// Prefix added to internal Ocypod Redis keys. Avoids any key collisions in Ocypod is
+    /// run on a Redis server used by other applications.
+    pub key_namespace: String,
 }
 
 impl Default for RedisConfig {
     fn default() -> Self {
         RedisConfig {
             url: "redis://127.0.0.1".to_owned(),
+            key_namespace: "".to_owned(),
         }
     }
 }

@@ -71,7 +71,7 @@ a JSON definition of the job to the server.
 The "input" fields contains any JSON that you want, this is the main job
 payload that workers will receive and process. This is also where you'd set
 other job configuration, such as number of retries, timeouts, etc. (see the
-TODO: job creation section for more details).
+[job creation API](api#post-queuequeuenamejob) section for more details).
 
     $ curl -i -H 'content-type: application/json' -XPOST -d '{"input": [1,2,3]}' localhost:8023/queue/demo/job
 

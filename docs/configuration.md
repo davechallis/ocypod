@@ -49,6 +49,11 @@ Configuration for connectivity to the Redis server used by Ocypod. Uses
 Fields:
 
 * `url` (string) - [Redis connection URI](https://www.iana.org/assignments/uri-schemes/prov/redis) (default: "redis://127.0.0.1")
+* `key_namespace` (string) - optional prefix to add to all Redis keys used by Ocypod(default: "")
+
+The `key_namespace` can be set to avoid any key collisions when running separate Ocypod on a Redis
+server used by other applications. The namespace will be added as a prefix to all keys Ocypod
+creates (e.g. if `key_namespace="abc"`, then a queue named "x" will be created with key `abc:queue:x` instead of `queue:x`).
 
 Example:
 
