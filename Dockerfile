@@ -1,13 +1,14 @@
 # Statically compile with optimisations in the build image
-FROM ekidd/rust-musl-builder:1.57.0 AS builder
-COPY . ./
-RUN sudo chown -R rust:rust /home/rust && cargo fetch
+FROM clux/muslrust:1.62.1 AS builder
+WORKDIR /build
+COPY Cargo.toml Cargo.lock ./
+COPY src/ ./src/
 RUN cargo build --release
 
 # Copy static binary from build image into minimal Debian-based image
 FROM alpine:latest
 COPY --from=builder \
-    /home/rust/src/target/x86_64-unknown-linux-musl/release/ocypod-server \
+    /build/target/x86_64-unknown-linux-musl/release/ocypod-server \
     /usr/local/bin/
 EXPOSE 8023
 ENTRYPOINT ["/usr/local/bin/ocypod-server"]
