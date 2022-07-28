@@ -812,11 +812,10 @@ impl RedisManager {
 
     /// Get unique Redis key for given tag.
     pub fn build_tag_key(&self, tag: &str) -> OcyResult<String> {
-        if !tag.is_empty()
-            && tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-') {
+        if !tag.is_empty() {
             Ok(format!("{}{}", self.tag_prefix, tag))
         } else {
-            Err(OcyError::bad_request("Invalid tag name, valid characters: a-zA-Z0-9_.-"))
+            Err(OcyError::bad_request("tags cannot be empty"))
         }
     }
 }
