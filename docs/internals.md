@@ -17,7 +17,7 @@ The `ocypod-server` itself is stateless, so there should be no issues with
 running multiple instances of the server with the same Redis instance as a
 backend.
 
-Internally, several Redis data structures are used:
+Internally, several Redis data structures are used, using the following names in Redis (unless altered by the `key_namespace` parameter):
 
 * `limbo` - list used as temporary holding area for jobs that are popped from a queue, they're kept here while the job's metadata is updated, before being moved to another queue
 * `running` - list storing currently running job IDs
