@@ -1092,6 +1092,7 @@ dependencies = [
  "net2",
  "rand 0.4.6",
  "redis",
+ "regex",
  "serde",
  "serde_json",
  "socket2 0.3.19",
