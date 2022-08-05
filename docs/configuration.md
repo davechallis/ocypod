@@ -136,7 +136,6 @@ name = "${PREFIX=}name"
 An example of a config file using these features might look as follows:
 
 ```toml
-✦ ❯ fg
 [server]
 host = "${OCYPOD_HOST=localhost}"
 port = ${OCYPOD_PORT=8023}
