@@ -6,6 +6,10 @@ file.
 All sections and fields of the configuration are optional, and defaults shown
 will be used if not present.
 
+The config file can be interpolated from the environment, see the
+[environment variable interpolation](#configuration-environmentvariableinterpolation)
+section below for details.
+
 ## Server section
 
 General configuration for the `ocypod-server` itself, uses `[server]` as a
@@ -93,8 +97,64 @@ The configuration below will create 3 queues, named `default`, `my_2nd_queue`, a
     [queue.my_2nd_queue]
     retries = 5
     retry_delays = ["10s", "1m", "5m"]
-    
+
     [queue.another-queue]
     timeout = "5m"
     heartbeat_timeout = "30s"
     expires_after = "1d"
+
+## Environment variable interpolation
+
+The TOML configuration file supports interpolation from environment variables,
+in order to simplify running Ocypod in different environments without having
+to modify the configuration file each time.
+
+Interpolation can be done anywhere in the config file, and is of the form:
+
+```
+${VARIABLE_NAME}
+```
+
+If an environment variable is not set, then the service will fail to start
+with an error.
+
+Defaults can also be specified to allow fallback values if an environment
+variable is not set:
+
+```
+${VARIABLE_NAME=default_value}
+```
+
+An empty default value can also be used as a default to allow an environment
+variable to be missing and default to an empty string, e.g.:
+
+```
+name = "${PREFIX=}name"
+```
+
+
+An example of a config file using these features might look as follows:
+
+```toml
+✦ ❯ fg
+[server]
+host = "${OCYPOD_HOST=localhost}"
+port = ${OCYPOD_PORT=8023}
+log_level = "${OCYPOD_LOG_LEVEL=info}"
+timeout_check_interval = "5s"
+retry_check_interval = "5s"
+expiry_check_interval = "5s"
+
+[redis]
+url = "redis://${REDIS_HOST}:${REDIS_PORT}"
+
+[queue.${QUEUE_PREFIX=}default}]
+timeout = "1m"
+retries = 2
+
+[queue.${QUEUE_PREFIX=}queue2}]
+timeout = "5m"
+```
+
+This would require the `REDIS_HOST` and `REDIS_PORT` environment variables to
+be set, and would fall back to defaults for the others.

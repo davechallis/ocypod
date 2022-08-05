@@ -16,7 +16,7 @@ use structopt::StructOpt;
 
 use crate::models::Duration;
 
-const INTERPOLATE_RE: &str = r"(?m)\$\{([A-Z][A-Z0-9_]*)(?:=([^}]+))?\}";
+const INTERPOLATE_RE: &str = r"(?m)\$\{([A-Z][A-Z0-9_]*)(?:=([^}]*))?\}";
 
 /// Parsed command line options when the server application is started.
 #[derive(Debug, StructOpt)]
@@ -80,15 +80,13 @@ impl Config {
         let path = path.as_ref();
         debug!("Reading configuration from {}", path.display());
 
-        let data = match fs::read_to_string(path) {
-            Ok(data) => data,
-            Err(err) => return Err(err.to_string()),
-        };
+        let data = fs::read_to_string(path)
+            .map_err(|e| e.to_string())?;
 
-        let conf: Config = match toml::from_str(&data) {
-            Ok(conf) => conf,
-            Err(err) => return Err(err.to_string()),
-        };
+        let interpolated_data = Self::interpolate_env(&data)?;
+
+        let conf: Config = toml::from_str(&interpolated_data)
+            .map_err(|e| e.to_string())?;
 
         Ok(conf)
     }
@@ -103,21 +101,38 @@ impl Config {
         &self.redis.url
     }
 
-    fn interpolate_env(raw_toml: &str) -> std::borrow::Cow<str> {
+    fn interpolate_env(raw_toml: &str) -> Result<std::borrow::Cow<str>, String> {
         let re = Regex::new(INTERPOLATE_RE)
             .expect("failed to compile interpolation regex");
 
-        re.replace_all(raw_toml, |captures: &Captures| {
+        let mut env_vars_missing = Vec::new();
+        let interpolated = re.replace_all(raw_toml, |captures: &Captures| {
             let var_name = captures.get(1)
                 .expect("capture should have at least 1 group");
 
-            let value = match std::env::var(var_name.as_str()) {
+            // Check if interpolated value was set in the environment.
+            match std::env::var(var_name.as_str()) {
+                // If set, then use it.
                 Ok(env_val) => env_val,
-                Err(_) => captures.get(2).map_or_else(String::new, |v| v.as_str().to_owned())
-            };
 
-            value
-        })
+                // If missing, check if a default was set, otherwise track the missing value to return as error.
+                Err(_) => match captures.get(2) {
+                    Some(val) => val.as_str().to_owned(),
+                    None => {
+                        env_vars_missing.push(var_name.as_str().to_owned());
+                        String::new()
+                    }
+                }
+            }
+        });
+
+        if env_vars_missing.is_empty() {
+            Ok(interpolated)
+        } else {
+            env_vars_missing.sort();
+            env_vars_missing.dedup();
+            Err(format!("could not interpolate environment variables into config, the following variables were not set: {}", env_vars_missing.join(", ")))
+        }
     }
 }
 
@@ -394,7 +409,6 @@ retry_delays = ["10s", "1m", "5m"]
 
     #[test]
     fn interpolation_from_env_defaults() {
-        let re = Regex::new(INTERPOLATE_RE).unwrap();
         let conf = r#"
 [server]
 port = ${OCYTEST_OCYPOD_PORT=8023}
@@ -403,7 +417,7 @@ log_level = "${OCYTEST_OCYPOD_LOG_LEVEL=info}"
 [redis]
 url = "redis://${OCYTEST_REDIS_HOST=localhost}:${OCYTEST_REDIS_PORT=6379}"
 
-[queue.${OCYTEST_QUEUE_PREFIX}foo]
+[queue.${OCYTEST_QUEUE_PREFIX=}foo]
         "#;
 
         let expected = r#"
@@ -417,12 +431,11 @@ url = "redis://localhost:6379"
 [queue.foo]
         "#;
 
-        assert_eq!(Config::interpolate_env(conf), expected);
+        assert_eq!(Config::interpolate_env(conf).unwrap(), expected);
     }
 
     #[test]
     fn interpolation_from_env() {
-        let re = Regex::new(INTERPOLATE_RE).unwrap();
         std::env::set_var("OCYTEST_B_OCYPOD_LOG_LEVEL", "debug");
         std::env::set_var("OCYTEST_B_REDIS_HOST", "example.com");
         std::env::set_var("OCYTEST_B_QUEUE_PREFIX", "prefix_");
@@ -449,6 +462,20 @@ url = "redis://example.com:6379"
 [queue.prefix_foo]
         "#;
 
+        assert_eq!(Config::interpolate_env(conf).unwrap(), expected);
+    }
+
+    #[test]
+    fn interpolation_from_env_missing_variables() {
+        let conf = "${A} ${B} ${C=default} ${B} ${A=default}";
+        let expected = Err("could not interpolate environment variables into config, the following variables were not set: A, B".to_owned());
         assert_eq!(Config::interpolate_env(conf), expected);
+    }
+
+    #[test]
+    fn interpolation_ensure_default_per_var() {
+        let conf = "${A=1} ${A=2} ${A=3}";
+        let expected = "1 2 3";
+        assert_eq!(Config::interpolate_env(conf).unwrap(), expected);
     }
 }
