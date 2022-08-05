@@ -1077,7 +1077,7 @@ dependencies = [
 
 [[package]]
 name = "ocypod"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "actix-rt 1.1.1",
  "actix-web",

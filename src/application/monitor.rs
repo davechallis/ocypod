@@ -11,7 +11,7 @@ use crate::config::ServerConfig;
 pub fn start_monitors(redis_manager: &RedisManager, pool: Pool, config: &ServerConfig) {
     start_timeout_monitor(redis_manager.clone(), pool.clone(), config.timeout_check_interval.0);
     start_retry_monitor(redis_manager.clone(), pool.clone(), config.retry_check_interval.0);
-    start_expiry_monitor(redis_manager.clone(), pool.clone(), config.expiry_check_interval.0);
+    start_expiry_monitor(redis_manager.clone(), pool, config.expiry_check_interval.0);
 }
 
 /// Start periodic background task that checks jobs for timeouts.

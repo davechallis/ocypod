@@ -262,7 +262,7 @@ impl<'a> RedisJob<'a> {
             .hget::<_, _, Option<String>>(&self.key, job::Field::Queue)
             .await?
         {
-            Some(queue) => Ok(RedisQueue::new(&self.redis_manager, queue)?),
+            Some(queue) => Ok(RedisQueue::new(self.redis_manager, queue)?),
             None => Err(OcyError::NoSuchJob(self.id)),
         }
     }
@@ -301,7 +301,7 @@ impl<'a> RedisJob<'a> {
     ) -> OcyResult<()> {
         let _: () = transaction_async!(conn, &[&self.key], {
             let mut pipe = redis::pipe();
-            let pipe_ref = self.set_output_in_pipe(conn, pipe.atomic(), &value).await?;
+            let pipe_ref = self.set_output_in_pipe(conn, pipe.atomic(), value).await?;
             pipe_ref.query_async(conn).await?
         });
         Ok(())
@@ -326,7 +326,7 @@ impl<'a> RedisJob<'a> {
         debug!("Fetching job status for job_id={}", self.id);
         conn.hget::<_, _, Option<job::Status>>(&self.key, job::Field::Status)
             .await?
-            .ok_or_else(|| OcyError::NoSuchJob(self.id))
+            .ok_or(OcyError::NoSuchJob(self.id))
     }
 
     /// Update this job's status field in a transaction.
@@ -530,7 +530,7 @@ impl<'a> RedisJob<'a> {
             .await?;
 
         if let Some(queue) = queue {
-            pipe.lrem(RedisQueue::new(&self.redis_manager, &queue)?.jobs_key, 1, self.id)
+            pipe.lrem(RedisQueue::new(self.redis_manager, &queue)?.jobs_key, 1, self.id)
                 .ignore();
         } else {
             // queue is mandatory field, if missing then means job has been deleted

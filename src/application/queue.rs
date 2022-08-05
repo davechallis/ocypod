@@ -139,7 +139,7 @@ impl<'a> RedisQueue<'a> {
 
                     let job_ids: Vec<u64> = conn.lrange(&self.jobs_key, 0, -1).await?;
                     for job_id in &job_ids {
-                        let job_key = RedisJob::new(&self.redis_manager, *job_id).key().to_owned();
+                        let job_key = RedisJob::new(self.redis_manager, *job_id).key().to_owned();
                         tag_pipe.hget(&job_key, &[job::Field::Id, job::Field::Tags]);
                         keys_to_del.push(job_key);
                     }
@@ -196,7 +196,7 @@ impl<'a> RedisQueue<'a> {
         ] {
             for job_id in conn.lrange::<_, Vec<u64>>(*queue_key, 0, -1).await? {
                 pipe.hget(
-                    RedisJob::new(&self.redis_manager, job_id).key(),
+                    RedisJob::new(self.redis_manager, job_id).key(),
                     &[job::Field::Id, job::Field::Queue, job::Field::Status],
                 );
             }

@@ -18,19 +18,10 @@ use redis::{self, FromRedisValue, RedisResult};
 use serde::Serialize;
 
 // TODO: add redis stats, e.g. memory used etc.
-#[derive(Debug, Eq, PartialEq, Serialize)]
+#[derive(Default, Debug, Eq, PartialEq, Serialize)]
 pub struct ServerInfo {
     pub queues: HashMap<String, QueueInfo>,
     pub statistics: JobStats,
-}
-
-impl Default for ServerInfo {
-    fn default() -> Self {
-        ServerInfo {
-            queues: HashMap::new(),
-            statistics: JobStats::default(),
-        }
-    }
 }
 
 #[derive(Debug, Default, Eq, PartialEq, Serialize)]

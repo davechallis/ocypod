@@ -1,4 +1,4 @@
-# Unreleased
+# 0.8.0 (2022-08-05)
 
 * Add `key_namespace` parameter to the `redis` configuration section. Adds a
   prefix to all keys used by Ocypod to allow Redis to be shared with other

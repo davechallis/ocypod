@@ -1,12 +1,12 @@
 [package]
 name = "ocypod"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Dave Challis <dave@suicas.net>"]
 description = "Ocypod is a Redis-backed service for orchestrating background jobs."
 repository = "https://github.com/davechallis/ocypod"
 license = "Apache-2.0"
 readme = "README.md"
-edition = "2018"
+edition = "2021"
 
 [badges]
 travis-ci = { repository = "davechallis/ocypod" }

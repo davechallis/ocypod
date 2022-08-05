@@ -118,7 +118,7 @@ impl JobMeta {
     /// Get a mandatory field value from this struct's map. Caller must ensure that field is present.
     fn get_mandatory_field<T: redis::FromRedisValue>(&self, field: &Field) -> T {
         redis::from_redis_value(
-            &self
+            self
                 .map
                 .get(field)
                 .unwrap_or_else(|| panic!("failed to get: {}", field)),

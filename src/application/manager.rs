@@ -142,16 +142,16 @@ impl RedisManager {
             stat_jobs_retried_key: ns.clone() + STAT_JOBS_RETRIED_KEY,
             stat_jobs_failed_key: ns.clone() + STAT_JOBS_FAILED_KEY,
             stat_jobs_timed_out_key: ns.clone() + STAT_JOBS_TIMED_OUT_KEY,
-            stat_jobs_cancelled_key: ns.clone() + STAT_JOBS_CANCELLED_KEY,
+            stat_jobs_cancelled_key: ns + STAT_JOBS_CANCELLED_KEY,
         }
     }
 
     fn queue_from_string(&self, name: &str) -> OcyResult<RedisQueue> {
-        RedisQueue::new(&self, name)
+        RedisQueue::new(self, name)
     }
 
     fn job_from_id(&self, id: u64) -> RedisJob {
-        RedisJob::new(&self, id)
+        RedisJob::new(self, id)
     }
 
     /// Create or update a queue in Redis with given name and settings.
