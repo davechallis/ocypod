@@ -28,6 +28,7 @@ actix-web = "4"
 actix-rt = "1.0"
 deadpool = { version = "0.9", features = ["managed", "rt_tokio_1"] }
 deadpool-redis = "0.10"
+regex = "1"
 
 [dev-dependencies]
 net2 = "0.2"
