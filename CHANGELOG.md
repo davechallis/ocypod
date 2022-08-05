@@ -3,6 +3,10 @@
 * Add `key_namespace` parameter to the `redis` configuration section. Adds a
   prefix to all keys used by Ocypod to allow Redis to be shared with other
   applications without risk of key collisions.
+* Add config file interpolation from environment variables [#21](https://github.com/davechallis/ocypod/issues/21).
+* Fix bug where tag names were stricter on read than creation.
+* Update various 3rd party dependencies.
+* Switch docker musl builder image to one that supports newer rust compiler versions.
 
 # 0.7.0 (2022-01-14)
 
