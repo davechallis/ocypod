@@ -7,7 +7,7 @@ All sections and fields of the configuration are optional, and defaults shown
 will be used if not present.
 
 The config file can be interpolated from the environment, see the
-[environment variable interpolation](#configuration-environmentvariableinterpolation)
+[environment variable interpolation](#environment-variable-interpolation)
 section below for details.
 
 ## Server section
