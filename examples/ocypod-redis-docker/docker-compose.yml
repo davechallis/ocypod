@@ -8,6 +8,8 @@ services:
     command: /etc/ocypod.toml
     ports:
       - 8023:8023
+    depends_on:
+      - ocypod-redis
   ocypod-redis:
     image: redis:6
     ports:
