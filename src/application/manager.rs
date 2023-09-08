@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::default::Default;
 
-use log::{debug, info, warn};
+use log::{debug, info};
 use redis::{aio::ConnectionLike, AsyncCommands};
 
 use super::{job::RedisJob, queue::RedisQueue};
@@ -488,194 +488,6 @@ impl RedisManager {
         Ok(expired)
     }
 
-    // TODO: make available as endpoint? Or optional periodic check?
-    /// Checks the integrity of Redis DB, e.g. checking for dangling indexes, jobs in invalid states, etc.
-    ///
-    /// Mostly intended for use during development, as it has a non-trivial runtime cost.
-    pub async fn check_db_integrity<C: ConnectionLike + Send>(&self, conn: &mut C) -> OcyResult<()> {
-        for queue_name in self.queue_names(conn).await? {
-            let queue = self.queue_from_string(&queue_name)?;
-            if !(queue.exists(conn).await?) {
-                warn!(
-                    "Queue '{}' found in {}, but not as key",
-                    queue_name,
-                    &self.queues_key
-                );
-            }
-        }
-
-        let mut iter: redis::AsyncIter<String> = conn.scan_match::<_, String>("queue:*").await?;
-        let mut queues = Vec::new();
-        while let Some(queue_key) = iter.next_item().await {
-            if !queue_key.ends_with(":jobs") {
-                queues.push(queue_key);
-            }
-        }
-
-        for queue_key in queues {
-            if !conn
-                .sismember::<_, _, bool>(&self.queues_key, &queue_key[6..])
-                .await?
-            {
-                warn!(
-                    "Queue '{}' found as key, but not in {}",
-                    &queue_key,
-                    &self.queues_key
-                );
-            }
-        }
-
-        let _: () = transaction_async!(conn, &[&self.running_key], {
-            let mut pipe = redis::pipe();
-            let pipe_ref = pipe.atomic();
-
-            for job_id in conn.lrange::<_, Vec<u64>>(&self.running_key, 0, -1).await? {
-                pipe_ref.hget(
-                    self.job_from_id(job_id).key(),
-                    &[job::Field::Id, job::Field::Status, job::Field::StartedAt],
-                );
-            }
-
-            let info: Vec<(Option<u64>, Option<job::Status>, Option<DateTime>)> =
-                vec_from_redis_pipe(conn, pipe_ref).await?;
-            for (job_id, status, started_at) in info {
-                let job_id = match job_id {
-                    Some(job_id) => job_id,
-                    None => {
-                        warn!(
-                            "Found job in {} queue, but did not find key",
-                            &self.running_key
-                        );
-                        continue;
-                    }
-                };
-
-                match status {
-                    Some(job::Status::Running) => (),
-                    Some(status) => {
-                        warn!("Found status '{}' in {} queue", status, &self.running_key)
-                    }
-                    None => warn!(
-                        "Found job {} in {} queue, but did not find key",
-                        job_id,
-                        &self.running_key
-                    ),
-                }
-
-                if started_at.is_none() {
-                    warn!(
-                        "Found job {} in {} queue, but job has no started_at",
-                        job_id,
-                        &self.running_key
-                    );
-                }
-            }
-
-            Some(())
-        });
-
-        let _: () = transaction_async!(conn, &[&self.failed_key], {
-            let mut pipe = redis::pipe();
-            let pipe_ref = pipe.atomic();
-
-            for job_id in conn.lrange::<_, Vec<u64>>(&self.failed_key, 0, -1).await? {
-                pipe_ref.hget(
-                    self.job_from_id(job_id).key(),
-                    &[job::Field::Id, job::Field::Status, job::Field::EndedAt],
-                );
-            }
-
-            let info: Vec<(Option<u64>, Option<job::Status>, Option<DateTime>)> =
-                vec_from_redis_pipe(conn, pipe_ref).await?;
-            for (job_id, status, ended_at) in info {
-                let job_id = match job_id {
-                    Some(job_id) => job_id,
-                    None => {
-                        warn!(
-                            "Found job in {} queue, but did not find key",
-                            &self.failed_key
-                        );
-                        continue;
-                    }
-                };
-
-                match status {
-                    Some(job::Status::Failed) | Some(job::Status::TimedOut) => (),
-                    Some(status) => {
-                        warn!("Found status '{}' in {} queue", status, &self.failed_key)
-                    }
-                    None => warn!(
-                        "Found job {} in {} queue, but did not find key",
-                        job_id,
-                        &self.failed_key
-                    ),
-                }
-
-                if ended_at.is_none() {
-                    warn!(
-                        "Found job {} in {} queue, but job has no ended_at",
-                        job_id,
-                        &self.failed_key
-                    );
-                }
-            }
-
-            Some(())
-        });
-
-        let _: () = transaction_async!(conn, &[&self.ended_key], {
-            let mut pipe = redis::pipe();
-            let pipe_ref = pipe.atomic();
-
-            for job_id in conn.lrange::<_, Vec<u64>>(&self.ended_key, 0, -1).await? {
-                pipe_ref.hget(
-                    self.job_from_id(job_id).key(),
-                    &[job::Field::Id, job::Field::Status, job::Field::EndedAt],
-                );
-            }
-
-            let info: Vec<(Option<u64>, Option<job::Status>, Option<DateTime>)> =
-                vec_from_redis_pipe(conn, pipe_ref).await?;
-            for (job_id, status, ended_at) in info {
-                let job_id = match job_id {
-                    Some(job_id) => job_id,
-                    None => {
-                        warn!(
-                            "Found job in {} queue, but did not find key",
-                            &self.ended_key
-                        );
-                        continue;
-                    }
-                };
-
-                match status {
-                    Some(job::Status::Failed)
-                    | Some(job::Status::TimedOut)
-                    | Some(job::Status::Completed)
-                    | Some(job::Status::Cancelled) => (),
-                    Some(status) => warn!("Found status '{}' in {} queue", status, &self.ended_key),
-                    None => warn!(
-                        "Found job {} in {} queue, but did not find key",
-                        job_id,
-                        &self.ended_key
-                    ),
-                }
-
-                if ended_at.is_none() {
-                    warn!(
-                        "Found job {} in {} queue, but job has no started_at",
-                        job_id,
-                        &self.ended_key
-                    );
-                }
-            }
-
-            Some(())
-        });
-
-        Ok(())
-    }
-
     /// Check connection to Redis using ping command.
     #[cfg_attr(feature = "cargo-clippy", allow(clippy::unit_arg))]
     pub async fn check_ping<C: ConnectionLike>(conn: &mut C) -> OcyResult<()> {
@@ -698,7 +510,7 @@ impl RedisManager {
             .ensure_exists(conn)
             .await?;
         let job = match conn
-            .rpoplpush::<_, Option<u64>>(queue.jobs_key(), &self.limbo_key)
+            .rpoplpush::<_, _, Option<u64>>(queue.jobs_key(), &self.limbo_key)
             .await?
         {
             Some(job_id) => self.job_from_id(job_id),
